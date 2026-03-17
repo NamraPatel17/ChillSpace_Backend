@@ -1,10 +1,9 @@
-const mongoose = require("mongoose")
-
 const propertySchema = new mongoose.Schema({
 
     hostId:{
         type:mongoose.Schema.Types.ObjectId,
-        ref:"User"
+        ref:"User",
+        required:true
     },
 
     title:{
@@ -12,17 +11,32 @@ const propertySchema = new mongoose.Schema({
         required:true
     },
 
-    description:{
-        type:String
-    },
+    description:String,
 
     propertyType:{
         type:String,
         enum:["Apartment","House","Villa"]
     },
 
+    location:{
+        type:String,
+        required:true
+    },
+
     pricePerNight:{
-        type:Number
+        type:Number,
+        required:true
+    },
+
+    amenities:[String],
+
+    images:[String],
+
+    maxGuests:Number,
+
+    rating:{
+        type:Number,
+        default:0
     },
 
     availabilityStatus:{
@@ -31,5 +45,3 @@ const propertySchema = new mongoose.Schema({
     }
 
 },{timestamps:true})
-
-module.exports = mongoose.model("Property",propertySchema)
