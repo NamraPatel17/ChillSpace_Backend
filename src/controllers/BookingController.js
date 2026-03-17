@@ -5,7 +5,49 @@ const Booking = require("../models/Booking")
 exports.createBooking = async (req,res)=>{
     try{
 
-        const booking = new Booking(req.body)
+        const { propertyId, guestId, checkInDate, checkOutDate, totalPrice } = req.body
+
+        if(!propertyId || !guestId || !checkInDate || !checkOutDate){
+            return res.status(400).json({
+                message:"propertyId, guestId, checkInDate and checkOutDate are required"
+            })
+        }
+
+        const checkIn = new Date(checkInDate)
+        const checkOut = new Date(checkOutDate)
+
+        if(checkOut <= checkIn){
+            return res.status(400).json({
+                message:"checkOutDate must be after checkInDate"
+            })
+        }
+
+        // prevent double bookings: any confirmed booking that overlaps the range
+        const overlapping = await Booking.findOne({
+            propertyId,
+            bookingStatus:"Confirmed",
+            $or:[
+                {
+                    checkInDate:{ $lt: checkOut },
+                    checkOutDate:{ $gt: checkIn }
+                }
+            ]
+        })
+
+        if(overlapping){
+            return res.status(400).json({
+                message:"Property is not available for the selected dates"
+            })
+        }
+
+        const booking = new Booking({
+            propertyId,
+            guestId,
+            checkInDate:checkIn,
+            checkOutDate:checkOut,
+            totalPrice
+        })
+
         const savedBooking = await booking.save()
 
         res.status(201).json({
