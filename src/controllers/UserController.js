@@ -25,9 +25,17 @@ const registerUser = async(req,res)=>{
 
         
     }catch(err){
+        console.log("REGISTER ERROR:", err)  // <‑‑ add this
+        // Duplicate email error from MongoDB
+        if (err.code === 11000 && err.keyPattern && err.keyPattern.email) {
+            return res.status(400).json({
+                message: "Email already registered"
+            })
+        }
+        
         res.status(500).json({
             message:"error while creating user",
-            err:err
+            err:err.message || err
         })
     }
 }
