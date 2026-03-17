@@ -18,11 +18,56 @@ exports.addProperty = async (req,res)=>{
 }
 
 
-// GET ALL PROPERTIES
+// GET ALL PROPERTIES (with filters)
 exports.getAllProperties = async (req,res)=>{
     try{
 
-        const properties = await Property.find()
+        const {
+            location,
+            minPrice,
+            maxPrice,
+            propertyType,
+            amenities,
+            minRating
+        } = req.query
+
+        const filter = {}
+
+        if(location){
+            // case-insensitive partial match on location
+            filter.location = { $regex: location, $options: "i" }
+        }
+
+        if(propertyType){
+            filter.propertyType = propertyType
+        }
+
+        if(minRating){
+            filter.rating = { $gte: Number(minRating) }
+        }
+
+        if(minPrice || maxPrice){
+            filter.pricePerNight = {}
+            if(minPrice){
+                filter.pricePerNight.$gte = Number(minPrice)
+            }
+            if(maxPrice){
+                filter.pricePerNight.$lte = Number(maxPrice)
+            }
+        }
+
+        if(amenities){
+            // amenities can be comma separated string: "WiFi,Pool,Parking"
+            const amenityList = Array.isArray(amenities)
+                ? amenities
+                : amenities.split(",").map(a => a.trim()).filter(Boolean)
+
+            if(amenityList.length){
+                filter.amenities = { $all: amenityList }
+            }
+        }
+
+        const properties = await Property.find(filter)
         .populate("hostId","fullName email")
 
         res.status(200).json(properties)
