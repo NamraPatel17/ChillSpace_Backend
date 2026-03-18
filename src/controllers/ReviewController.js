@@ -1,11 +1,16 @@
-const Review = require("../models/Review")
+const Review = require("../models/ReviewModel")
 
 
 // ADD REVIEW
 exports.addReview = async (req,res)=>{
     try{
 
-        const review = new Review(req.body)
+        const reviewData = {
+            ...req.body,
+            guestId: req.user._id // enforce guest ID from the validated token
+        }
+
+        const review = new Review(reviewData)
         const savedReview = await review.save()
 
         res.status(201).json({

@@ -1,15 +1,16 @@
-const Booking = require("../models/Booking")
+const Booking = require("../models/BookingModel")
 
 
 // CREATE BOOKING
 exports.createBooking = async (req,res)=>{
     try{
 
-        const { propertyId, guestId, checkInDate, checkOutDate, totalPrice } = req.body
+        const { propertyId, checkInDate, checkOutDate, totalPrice } = req.body
+        const guestId = req.user._id // enforce guest ID from the validated token
 
-        if(!propertyId || !guestId || !checkInDate || !checkOutDate){
+        if(!propertyId || !checkInDate || !checkOutDate){
             return res.status(400).json({
-                message:"propertyId, guestId, checkInDate and checkOutDate are required"
+                message:"propertyId, checkInDate and checkOutDate are required"
             })
         }
 

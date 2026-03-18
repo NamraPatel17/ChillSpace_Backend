@@ -1,4 +1,4 @@
-const AdminActivity = require("../models/AdminActivity")
+const AdminActivity = require("../models/AdminActivityModel")
 
 
 // CREATE ACTIVITY LOG
