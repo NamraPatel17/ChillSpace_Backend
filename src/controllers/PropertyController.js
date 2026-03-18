@@ -1,10 +1,23 @@
-const Property = require("../models/Property")
+const Property = require("../models/PropertyModel")
+const uploadToCloudinary = require("../utils/CloudinaryUtil")
 
 // ADD PROPERTY
 exports.addProperty = async (req,res)=>{
     try{
+        
+        const propertyData = { ...req.body }
+        
+        // Handle images if they were uploaded
+        if (req.files && req.files.length > 0) {
+            const imageUrls = []
+            for (const file of req.files) {
+                const cloudinaryResponse = await uploadToCloudinary(file.path)
+                imageUrls.push(cloudinaryResponse.secure_url)
+            }
+            propertyData.images = imageUrls
+        }
 
-        const property = new Property(req.body)
+        const property = new Property(propertyData)
         const savedProperty = await property.save()
 
         res.status(201).json({

@@ -17,7 +17,6 @@ const mailSend = async(to,subject,templateName)=>{
     const filePath = path.join(__dirname,"Templates",templateName)
 
     const htmlContent = fs.readFileSync(filePath,"utf8")
-    console.log(filePath)
 
     const mailOptions = {
         from:process.env.EMAIL_USER,

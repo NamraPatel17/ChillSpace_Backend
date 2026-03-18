@@ -1,6 +1,0 @@
-create:
-
-bookModel -->4 operation -->createbook , get all book, getbook by id, delete book
-cityModel --> ""  ""  ""  ""  ""  ""  ""  ""  ""  ""  ""  ""  ""  ""  "" ""  ""  "" 
-stateModel --> ""  ""  "" ""  ""  "" ""  ""  "" ""  ""  "" ""  ""  "" ""  ""  "" "" 
-categoryModel-->""  ""  "" ""  ""  "" ""  ""  "" ""  ""  "" ""  ""  "" ""  ""  "" 
