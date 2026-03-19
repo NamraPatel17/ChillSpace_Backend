@@ -90,8 +90,47 @@ const loginUser= async(req,res)=>{
     }
 }
 
+const getProfile = async (req, res) => {
+    try {
+        const user = await userSchema.findById(req.user._id).select("-password")
+        if (!user) {
+            return res.status(404).json({ message: "User not found" })
+        }
+        res.status(200).json(user)
+    } catch (err) {
+        res.status(500).json({ message: "Error fetching profile", error: err.message })
+    }
+}
+
+const updateProfile = async (req, res) => {
+    try {
+        const updates = req.body
+        
+        // Ensure sensitive fields like password or role cannot be updated here
+        delete updates.password
+        delete updates.role
+        delete updates.verificationStatus
+        delete updates.accountStatus
+
+        const updatedUser = await userSchema.findByIdAndUpdate(
+            req.user._id,
+            { $set: updates },
+            { new: true, runValidators: true }
+        ).select("-password")
+
+        res.status(200).json({
+            message: "Profile updated successfully",
+            data: updatedUser
+        })
+    } catch (err) {
+        res.status(500).json({ message: "Error updating profile", error: err.message })
+    }
+}
+
 
 module.exports ={
     registerUser,
-    loginUser
+    loginUser,
+    getProfile,
+    updateProfile
 }

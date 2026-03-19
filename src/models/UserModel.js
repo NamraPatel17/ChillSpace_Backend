@@ -37,6 +37,29 @@ const userSchema = new mongoose.Schema({
         type:String,
         enum:["Active","Suspended","Deleted"],
         default:"Active"
+    },
+
+    bio:{
+        type:String,
+        default:""
+    },
+
+    language:{
+        type:String,
+        default:"English"
+    },
+
+    profilePicture:{
+        type:String,
+        default:""
+    },
+
+    notificationPreferences:{
+        email: { type: Boolean, default: true },
+        sms: { type: Boolean, default: true },
+        bookings: { type: Boolean, default: true },
+        reviews: { type: Boolean, default: true },
+        marketing: { type: Boolean, default: false }
     }
 
 },{timestamps:true})

@@ -9,4 +9,25 @@ router.post("/activity", validateToken, checkRole(["Admin"]), adminController.cr
 // Get all activities
 router.get("/activity", validateToken, checkRole(["Admin"]), adminController.getAllActivities)
 
+// Admin Analytics Dashboard
+router.get("/analytics", validateToken, checkRole(["Admin"]), adminController.getAdminAnalytics)
+
+// Get all bookings
+router.get("/bookings", validateToken, checkRole(["Admin"]), adminController.getAllBookings)
+
+// Get all disputes
+router.get("/disputes", validateToken, checkRole(["Admin"]), adminController.getAllDisputes)
+
+// Get all payments / financials
+router.get("/payments", validateToken, checkRole(["Admin"]), adminController.getAllPayments)
+
+// Get all properties
+router.get("/properties", validateToken, checkRole(["Admin"]), adminController.getAllProperties)
+
+// Get all reviews
+router.get("/reviews", validateToken, checkRole(["Admin"]), adminController.getAllReviews)
+
+// Get all users
+router.get("/users", validateToken, checkRole(["Admin"]), adminController.getAllUsers)
+
 module.exports = router
