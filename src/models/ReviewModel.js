@@ -20,6 +20,11 @@ const reviewSchema = new mongoose.Schema({
 
     reviewText:{
         type:String
+    },
+
+    hostResponse:{
+        type:String,
+        default:null
     }
 
 },{timestamps:true})
