@@ -36,6 +36,16 @@ const propertySchema = new mongoose.Schema({
 
     maxGuests:Number,
 
+    bedrooms: {
+        type: Number,
+        default: 1
+    },
+
+    bathrooms: {
+        type: Number,
+        default: 1
+    },
+
     rating:{
         type:Number,
         default:0
@@ -47,3 +57,5 @@ const propertySchema = new mongoose.Schema({
     }
 
 },{timestamps:true})
+
+module.exports = mongoose.model("Property", propertySchema);

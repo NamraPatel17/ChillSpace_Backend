@@ -41,7 +41,9 @@ exports.getAllProperties = async (req,res)=>{
             maxPrice,
             propertyType,
             amenities,
-            minRating
+            minRating,
+            minBedrooms,
+            guests
         } = req.query
 
         const filter = {}
@@ -52,7 +54,18 @@ exports.getAllProperties = async (req,res)=>{
         }
 
         if(propertyType){
-            filter.propertyType = propertyType
+            const typeList = propertyType.split(",").map(t => t.trim()).filter(Boolean)
+            if (typeList.length > 0) {
+                filter.propertyType = { $in: typeList }
+            }
+        }
+
+        if(minBedrooms){
+            filter.bedrooms = { $gte: Number(minBedrooms) }
+        }
+
+        if(guests){
+            filter.maxGuests = { $gte: Number(guests) }
         }
 
         if(minRating){
