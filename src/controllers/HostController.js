@@ -44,7 +44,7 @@ exports.getHostAnalytics = async (req, res) => {
             guest: b.guestId ? b.guestId.fullName : "Unknown Guest",
             checkIn: new Date(b.checkInDate).toLocaleDateString(),
             checkOut: new Date(b.checkOutDate).toLocaleDateString(),
-            amount: `₹${b.totalPrice}`,
+            amount: `$${b.totalPrice}`,
             status: b.bookingStatus
         }))
 
@@ -84,7 +84,7 @@ exports.getHostBookings = async (req, res) => {
             checkIn: new Date(b.checkInDate).toLocaleDateString(),
             checkOut: new Date(b.checkOutDate).toLocaleDateString(),
             nights: Math.ceil((new Date(b.checkOutDate) - new Date(b.checkInDate)) / (1000 * 60 * 60 * 24)),
-            amount: `₹${b.totalPrice}`,
+            amount: `$${b.totalPrice}`,
             status: b.bookingStatus
         }))
 
@@ -155,7 +155,7 @@ exports.getHostEarnings = async (req, res) => {
                     date: date.toLocaleDateString(),
                     property: b.propertyId ? b.propertyId.title : "Unknown",
                     guest: b.guestId ? b.guestId.fullName : "Unknown",
-                    amount: `₹${payout}`,
+                    amount: `$${payout}`,
                     status: b.bookingStatus === "Completed" ? "Completed" : "Pending"
                 })
 
@@ -167,7 +167,7 @@ exports.getHostEarnings = async (req, res) => {
                     date: date.toLocaleDateString(),
                     property: b.propertyId ? b.propertyId.title : "Unknown",
                     guest: b.guestId ? b.guestId.fullName : "Unknown",
-                    amount: `₹${payout}`,
+                    amount: `$${payout}`,
                     status: "Pending"
                 })
             }
@@ -214,7 +214,7 @@ exports.getHostProperties = async (req, res) => {
                 name: p.title,
                 location: p.location,
                 image: p.images && p.images.length > 0 ? p.images[0] : "https://images.unsplash.com/photo-1542718610-a1d656d1884c?w=400",
-                price: `₹${p.pricePerNight}`,
+                price: `$${p.pricePerNight}`,
                 status: p.availabilityStatus ? "Active" : "Inactive",
                 bookings: bookingsCount,
                 rating: p.rating || 0,

@@ -55,3 +55,54 @@ exports.getConversation = async (req, res) => {
         res.status(500).json({ message: err.message })
     }
 }
+
+// GET ALL CONVERSATIONS LIST
+exports.getConversations = async (req, res) => {
+    try {
+        const userId = req.user._id;
+
+        const messages = await Message.find({
+            $or: [{ senderId: userId }, { receiverId: userId }]
+        })
+        .sort({ createdAt: -1 })
+        .populate("senderId", "fullName email")
+        .populate("receiverId", "fullName email")
+        .populate("propertyId", "title");
+
+        const convs = [];
+        const seen = new Set();
+
+        messages.forEach(msg => {
+            const isSender = msg.senderId._id.toString() === userId.toString();
+            const otherUser = isSender ? msg.receiverId : msg.senderId;
+            if (!otherUser) return;
+
+            const otherId = otherUser._id.toString();
+
+            if (!seen.has(otherId)) {
+                seen.add(otherId);
+                let unreadCount = 0;
+                if (!isSender && !msg.readStatus) unreadCount = 1;
+
+                convs.push({
+                    id: otherId,
+                    host: otherUser.fullName, 
+                    property: msg.propertyId ? msg.propertyId.title : "Direct Inquiry",
+                    lastMessage: msg.content,
+                    timestamp: new Date(msg.createdAt).toLocaleDateString([], {hour: '2-digit', minute:'2-digit'}),
+                    unread: unreadCount,
+                    avatar: otherUser.fullName.substring(0, 2).toUpperCase()
+                });
+            } else {
+                const existing = convs.find(c => c.id === otherId);
+                if (!isSender && !msg.readStatus && existing) {
+                    existing.unread += 1;
+                }
+            }
+        });
+
+        res.status(200).json(convs);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+}
