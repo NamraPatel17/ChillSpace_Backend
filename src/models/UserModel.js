@@ -60,6 +60,14 @@ const userSchema = new mongoose.Schema({
         bookings: { type: Boolean, default: true },
         reviews: { type: Boolean, default: true },
         marketing: { type: Boolean, default: false }
+    },
+
+    resetPasswordToken: {
+        type: String
+    },
+
+    resetPasswordExpires: {
+        type: Date
     }
 
 },{timestamps:true})

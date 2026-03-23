@@ -3,7 +3,7 @@ const fs = require("fs")
 const path = require("path")
 require("dotenv").config()
 
-const mailSend = async(to,subject,templateName)=>{
+const mailSend = async(to,subject,templateName, replacements = {})=>{
  try{
 
     const transporter = mailer.createTransport({
@@ -16,7 +16,12 @@ const mailSend = async(to,subject,templateName)=>{
 
     const filePath = path.join(__dirname,"Templates",templateName)
 
-    const htmlContent = fs.readFileSync(filePath,"utf8")
+    let htmlContent = fs.readFileSync(filePath,"utf8")
+
+    // Inject dynamic variables into HTML payload
+    for (const [key, value] of Object.entries(replacements)) {
+        htmlContent = htmlContent.replace(new RegExp(`{{${key}}}`, 'g'), value);
+    }
 
     const mailOptions = {
         from:process.env.EMAIL_USER,
