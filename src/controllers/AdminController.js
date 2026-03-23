@@ -456,7 +456,8 @@ exports.getAllUsers = async (req, res) => {
         let suspendedCount = 0;
 
         const formattedUsers = users.map(u => {
-            if (u.role === "Host") activeHosts++;
+            if (u.role === "Host" && u.accountStatus !== "Suspended") activeHosts++;
+            if (u.accountStatus === "Suspended") suspendedCount++;
             const uIdStr = u._id.toString();
 
             return {
@@ -464,7 +465,8 @@ exports.getAllUsers = async (req, res) => {
                 name: u.fullName || "Unknown",
                 email: u.email,
                 role: u.role,
-                status: "Active", // Assuming active for MVP; extend schema if needed
+                status: u.accountStatus || "Active",
+                verified: u.verificationStatus || false,
                 properties: propertyCounts[uIdStr] || 0,
                 bookings: bookingCounts[uIdStr] || 0,
                 joined: new Date(u.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short' })
@@ -478,6 +480,54 @@ exports.getAllUsers = async (req, res) => {
         };
 
         res.status(200).json({ users: formattedUsers, stats });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+}
+
+// VERIFY USER (ADMIN)
+exports.verifyUser = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const user = await User.findByIdAndUpdate(id, { verificationStatus: true }, { new: true });
+        if (!user) return res.status(404).json({ message: "User not found" });
+        res.status(200).json({ message: "User verified successfully", user });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+}
+
+// SUSPEND USER (ADMIN)
+exports.suspendUser = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const user = await User.findByIdAndUpdate(id, { accountStatus: "Suspended" }, { new: true });
+        if (!user) return res.status(404).json({ message: "User not found" });
+        res.status(200).json({ message: "User suspended successfully", user });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+}
+
+// UNSUSPEND USER (ADMIN)
+exports.unsuspendUser = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const user = await User.findByIdAndUpdate(id, { accountStatus: "Active" }, { new: true });
+        if (!user) return res.status(404).json({ message: "User not found" });
+        res.status(200).json({ message: "User reactivated successfully", user });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+}
+
+// DELETE USER (ADMIN)
+exports.deleteUser = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const user = await User.findByIdAndUpdate(id, { accountStatus: "Deleted" }, { new: true });
+        if (!user) return res.status(404).json({ message: "User not found" });
+        res.status(200).json({ message: "User deleted successfully", user });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }

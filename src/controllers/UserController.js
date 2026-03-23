@@ -2,6 +2,7 @@ const userSchema = require("../models/UserModel")
 const bcrypt = require("bcrypt")
 const mailSend = require("../utils/MailUtil")
 const jwt = require("jsonwebtoken")
+const crypto = require("crypto")
 const secret = "secret"
 
 const registerUser = async(req,res)=>{
@@ -53,6 +54,13 @@ const loginUser= async(req,res)=>{
         const foundUserFromEmail = await userSchema.findOne({email:email}) //admin@yopmail.com
         console.log(foundUserFromEmail)
         if(foundUserFromEmail){
+            if (foundUserFromEmail.accountStatus === "Suspended") {
+                return res.status(403).json({ message: "Your account has been suspended. Please contact support." });
+            }
+            if (foundUserFromEmail.accountStatus === "Deleted") {
+                return res.status(403).json({ message: "This account has been deleted." });
+            }
+
             //password compare
             const isPasswordMatched = await bcrypt.compare(password,foundUserFromEmail.password)
             //..if password compare it will return true else false
@@ -127,10 +135,80 @@ const updateProfile = async (req, res) => {
     }
 }
 
+const forgotPassword = async (req, res) => {
+    try {
+        const { email } = req.body;
+        const user = await userSchema.findOne({ email });
 
-module.exports ={
+        if (!user) {
+            return res.status(404).json({ message: "User not found with this email" });
+        }
+
+        // Generate 20-character hex crypto token
+        const resetToken = crypto.randomBytes(20).toString('hex');
+
+        // Set expiration (1 hour from now)
+        user.resetPasswordToken = resetToken;
+        user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
+
+        await user.save();
+
+        // Use frontend URL depending on env
+        const frontendURL = process.env.FRONTEND_URL || "http://localhost:5173";
+        const resetLink = `${frontendURL}/reset-password/${resetToken}`;
+
+        // Send Email with {{resetLink}} replacement
+        await mailSend(
+            user.email,
+            "ChillSpace - Password Reset",
+            "ResetPassword.html",
+            { resetLink }
+        );
+
+        res.status(200).json({ message: "Password reset link sent to your email" });
+    } catch (err) {
+        console.error("FORGOT PASSWORD ERROR:", err);
+        res.status(500).json({ message: "Error processing forgot password request", error: err.message });
+    }
+}
+
+const resetPassword = async (req, res) => {
+    try {
+        const { token } = req.params;
+        const { newPassword } = req.body;
+
+        // Find user by token & check if token is unexpired
+        const user = await userSchema.findOne({
+            resetPasswordToken: token,
+            resetPasswordExpires: { $gt: Date.now() }
+        });
+
+        if (!user) {
+            return res.status(400).json({ message: "Password reset token is invalid or has expired" });
+        }
+
+        // Hash new password
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        // Update user
+        user.password = hashedPassword;
+        user.resetPasswordToken = undefined;
+        user.resetPasswordExpires = undefined;
+
+        await user.save();
+
+        res.status(200).json({ message: "Password has been successfully reset" });
+    } catch (err) {
+        console.error("RESET PASSWORD ERROR:", err);
+        res.status(500).json({ message: "Error resetting password", error: err.message });
+    }
+}
+
+module.exports = {
     registerUser,
     loginUser,
     getProfile,
-    updateProfile
+    updateProfile,
+    forgotPassword,
+    resetPassword
 }

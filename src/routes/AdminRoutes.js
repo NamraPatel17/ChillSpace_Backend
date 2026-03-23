@@ -30,4 +30,10 @@ router.get("/reviews", validateToken, checkRole(["Admin"]), adminController.getA
 // Get all users
 router.get("/users", validateToken, checkRole(["Admin"]), adminController.getAllUsers)
 
+// Modify Users
+router.put("/users/:id/verify", validateToken, checkRole(["Admin"]), adminController.verifyUser)
+router.put("/users/:id/suspend", validateToken, checkRole(["Admin"]), adminController.suspendUser)
+router.put("/users/:id/unsuspend", validateToken, checkRole(["Admin"]), adminController.unsuspendUser)
+router.put("/users/:id/delete", validateToken, checkRole(["Admin"]), adminController.deleteUser)
+
 module.exports = router
