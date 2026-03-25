@@ -1,4 +1,7 @@
 const Booking = require("../models/BookingModel")
+const Property = require("../models/PropertyModel")
+const User = require("../models/UserModel")
+const mailSend = require("../utils/MailUtil")
 
 
 // CREATE BOOKING
@@ -50,6 +53,28 @@ exports.createBooking = async (req,res)=>{
         })
 
         const savedBooking = await booking.save()
+
+        // Send booking confirmation email to guest
+        try {
+            const guest = await User.findById(guestId)
+            const property = await Property.findById(propertyId)
+            if (guest && guest.email) {
+                await mailSend(
+                    guest.email,
+                    "ChillSpace - Booking Confirmation",
+                    "BookingConfirmation.html",
+                    {
+                        guestName: guest.fullName || "Guest",
+                        propertyName: property ? property.title : "Your Property",
+                        checkIn: checkIn.toDateString(),
+                        checkOut: checkOut.toDateString(),
+                        totalPrice
+                    }
+                )
+            }
+        } catch (mailErr) {
+            console.error("Booking email failed (non-critical):", mailErr.message)
+        }
 
         res.status(201).json({
             message:"Booking created successfully",

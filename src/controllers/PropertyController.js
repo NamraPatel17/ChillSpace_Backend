@@ -126,10 +126,34 @@ exports.getPropertyById = async (req,res)=>{
 // UPDATE PROPERTY
 exports.updateProperty = async (req,res)=>{
     try{
+        const uploadToCloudinary = require("../utils/CloudinaryUtil")
+
+        // keepImages: JSON array of existing image URLs the host wants to keep
+        let keepImages = []
+        if(req.body.keepImages){
+            try { keepImages = JSON.parse(req.body.keepImages) } catch(e){ keepImages = [] }
+        }
+
+        // Upload any newly attached files to Cloudinary
+        let newImageUrls = []
+        if(req.files && req.files.length > 0){
+            for(const file of req.files){
+                const result = await uploadToCloudinary(file.path)
+                newImageUrls.push(result.secure_url)
+            }
+        }
+
+        const combinedImages = [...keepImages, ...newImageUrls]
+
+        const updateData = { ...req.body }
+        delete updateData.keepImages
+        if(combinedImages.length > 0){
+            updateData.images = combinedImages
+        }
 
         const updatedProperty = await Property.findByIdAndUpdate(
             req.params.id,
-            req.body,
+            updateData,
             {new:true}
         )
 

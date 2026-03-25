@@ -69,7 +69,12 @@ const loginUser= async(req,res)=>{
                 res.status(200).json({
                     message:"Login Success",
                     token:token,
-                    role:foundUserFromEmail.role
+                    role:foundUserFromEmail.role,
+                    data: {
+                        _id: foundUserFromEmail._id,
+                        fullName: foundUserFromEmail.fullName,
+                        email: foundUserFromEmail.email
+                    }
                 })  
             }
             else{

@@ -25,6 +25,10 @@ const propertySchema = new mongoose.Schema({
         required:true
     },
 
+    street: String,
+    city: String,
+    country: String,
+
     pricePerNight:{
         type:Number,
         required:true
