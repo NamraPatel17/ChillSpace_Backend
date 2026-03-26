@@ -35,5 +35,6 @@ router.put("/users/:id/verify", validateToken, checkRole(["Admin"]), adminContro
 router.put("/users/:id/suspend", validateToken, checkRole(["Admin"]), adminController.suspendUser)
 router.put("/users/:id/unsuspend", validateToken, checkRole(["Admin"]), adminController.unsuspendUser)
 router.put("/users/:id/delete", validateToken, checkRole(["Admin"]), adminController.deleteUser)
+router.put("/bookings/:id/status", validateToken, checkRole(["Admin"]), adminController.updateBookingStatus)
 
 module.exports = router

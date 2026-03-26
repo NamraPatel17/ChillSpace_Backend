@@ -44,9 +44,22 @@ exports.createBooking = async (req,res)=>{
             })
         }
 
+        // Also check against host-blocked dates (unavailableDates)
+        const property = await Property.findById(propertyId)
+        const isBlocked = property.unavailableDates?.some(range => {
+            return (checkIn < range.endDate && checkOut > range.startDate)
+        })
+
+        if (isBlocked) {
+            return res.status(400).json({
+                message: "Property is restricted by host for the selected dates"
+            })
+        }
+
         const booking = new Booking({
             propertyId,
             guestId,
+            hostId: property.hostId, // added hostId reference
             checkInDate:checkIn,
             checkOutDate:checkOut,
             totalPrice
@@ -94,6 +107,7 @@ exports.getAllBookings = async (req,res)=>{
         const bookings = await Booking.find()
         .populate("propertyId")
         .populate("guestId","fullName email")
+        .populate("hostId", "fullName email")
 
         res.status(200).json(bookings)
 
@@ -109,7 +123,7 @@ exports.getBookingsByGuest = async (req,res)=>{
 
         const bookings = await Booking.find({
             guestId:req.params.guestId
-        }).populate("propertyId")
+        }).populate("propertyId").populate("hostId", "fullName")
 
         res.status(200).json(bookings)
 

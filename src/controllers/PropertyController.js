@@ -17,6 +17,19 @@ exports.addProperty = async (req,res)=>{
             propertyData.images = imageUrls
         }
 
+        // Process array fields if they arrive as strings
+        if (typeof propertyData.houseRules === 'string') {
+            try { 
+                propertyData.houseRules = JSON.parse(propertyData.houseRules) 
+            } catch(e) { 
+                // Split by newline or comma if not JSON
+                propertyData.houseRules = propertyData.houseRules.split(/[\n,]/).map(r => r.trim()).filter(Boolean)
+            }
+        }
+        if (typeof propertyData.amenities === 'string') {
+            try { propertyData.amenities = JSON.parse(propertyData.amenities) } catch(e) { propertyData.amenities = propertyData.amenities.split(',').map(a => a.trim()) }
+        }
+
         const property = new Property(propertyData)
         const savedProperty = await property.save()
 
@@ -43,10 +56,15 @@ exports.getAllProperties = async (req,res)=>{
             amenities,
             minRating,
             minBedrooms,
-            guests
+            guests,
+            hostId
         } = req.query
 
         const filter = {}
+
+        if (hostId) {
+            filter.hostId = hostId
+        }
 
         if(location){
             // case-insensitive partial match on location
@@ -180,5 +198,101 @@ exports.deleteProperty = async (req,res)=>{
 
     }catch(err){
         res.status(500).json({message:err.message})
+    }
+}
+
+// GET PROPERTY AVAILABILITY (merged bookings + blocked dates)
+exports.getPropertyAvailability = async (req, res) => {
+    try {
+        const Booking = require("../models/BookingModel")
+        const propertyId = req.params.id
+
+        const property = await Property.findById(propertyId)
+        if (!property) return res.status(404).json({ message: "Property not found" })
+
+        // 1. Get Confirmed/Pending bookings
+        const bookings = await Booking.find({
+            propertyId,
+            bookingStatus: { $in: ["Confirmed", "Pending"] }
+        })
+
+        const bookedRanges = bookings.map(b => ({
+            startDate: b.checkInDate,
+            endDate: b.checkOutDate,
+            type: "booked"
+        }))
+
+        // 2. Get Host-Blocked dates
+        const blockedRanges = (property.unavailableDates || []).map(r => ({
+            startDate: r.startDate,
+            endDate: r.endDate,
+            type: "blocked",
+            reason: r.reason,
+            id: r._id
+        }))
+
+        res.status(200).json({
+            bookedRanges,
+            blockedRanges,
+            merged: [...bookedRanges, ...blockedRanges]
+        })
+    } catch (err) {
+        res.status(500).json({ message: err.message })
+    }
+}
+
+// HOST: BLOCK DATES
+exports.addPropertyUnavailableRange = async (req, res) => {
+    try {
+        const { startDate, endDate, reason } = req.body
+        const property = await Property.findById(req.params.id)
+
+        if (!property) return res.status(404).json({ message: "Property not found" })
+        if (property.hostId.toString() !== req.user._id.toString()) {
+            return res.status(403).json({ message: "Unauthorized" })
+        }
+
+        property.unavailableDates.push({ startDate, endDate, reason })
+        await property.save()
+
+        res.status(200).json({ message: "Dates blocked successfully", data: property.unavailableDates })
+    } catch (err) {
+        res.status(500).json({ message: err.message })
+    }
+}
+
+// HOST: UNBLOCK DATES
+exports.removePropertyUnavailableRange = async (req, res) => {
+    try {
+        const { rangeId } = req.params
+        const property = await Property.findById(req.params.id)
+
+        if (!property) return res.status(404).json({ message: "Property not found" })
+        if (property.hostId.toString() !== req.user._id.toString()) {
+            return res.status(403).json({ message: "Unauthorized" })
+        }
+
+        property.unavailableDates = property.unavailableDates.filter(r => r._id.toString() !== rangeId)
+        await property.save()
+
+        res.status(200).json({ message: "Dates unblocked", data: property.unavailableDates })
+    } catch (err) {
+        res.status(500).json({ message: err.message })
+    }
+}
+
+// ADMIN: UPDATE STATUS (Suspend/Activate)
+exports.updatePropertyStatus = async (req, res) => {
+    try {
+        const { status } = req.body // boolean: true (Active), false (Suspended)
+        const property = await Property.findByIdAndUpdate(
+            req.params.id, 
+            { availabilityStatus: status },
+            { new: true }
+        )
+        if (!property) return res.status(404).json({ message: "Property not found" })
+        res.status(200).json({ message: `Property ${status ? 'activated' : 'suspended'} successfully`, data: property })
+    } catch (err) {
+        res.status(500).json({ message: err.message })
     }
 }

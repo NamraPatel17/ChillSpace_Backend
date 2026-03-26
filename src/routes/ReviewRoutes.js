@@ -11,4 +11,7 @@ router.get("/property/:propertyId", reviewController.getReviewsByProperty)
 // Delete a review
 router.delete("/:id", validateToken, reviewController.deleteReview)
 
+// Host rates a guest (after completed booking)
+router.post("/guest", validateToken, reviewController.addGuestReview)
+
 module.exports = router

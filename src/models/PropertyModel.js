@@ -58,6 +58,29 @@ const propertySchema = new mongoose.Schema({
     availabilityStatus:{
         type:Boolean,
         default:true
+    },
+
+    unavailableDates: [{
+        startDate: Date,
+        endDate: Date,
+        reason: String
+    }],
+
+    houseRules: [String],
+
+    checkInTime: {
+        type: String,
+        default: "3:00 PM"
+    },
+
+    checkOutTime: {
+        type: String,
+        default: "11:00 AM"
+    },
+
+    cancellationPolicy: {
+        type: String,
+        default: "Flexible - Full refund 24h prior to arrival"
     }
 
 },{timestamps:true})

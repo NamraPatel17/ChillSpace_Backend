@@ -12,6 +12,11 @@ const bookingSchema = new mongoose.Schema({
         ref:"User"
     },
 
+    hostId:{
+        type:mongoose.Schema.Types.ObjectId,
+        ref:"User"
+    },
+
     checkInDate:{
         type:Date
     },

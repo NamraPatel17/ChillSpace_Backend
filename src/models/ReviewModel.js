@@ -25,6 +25,18 @@ const reviewSchema = new mongoose.Schema({
     hostResponse:{
         type:String,
         default:null
+    },
+
+    reviewType:{
+        type:String,
+        enum:["property","guest"],
+        default:"property"
+    },
+
+    hostReviewer:{
+        type:mongoose.Schema.Types.ObjectId,
+        ref:"User",
+        default:null
     }
 
 },{timestamps:true})

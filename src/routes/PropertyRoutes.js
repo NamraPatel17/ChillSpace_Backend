@@ -19,4 +19,12 @@ router.put("/:id", validateToken, checkRole(["Host", "Admin"]), upload.array("im
 // Delete a property (Hosts and Admins only)
 router.delete("/:id", validateToken, checkRole(["Host", "Admin"]), propertyController.deleteProperty)
 
+// Availability endpoints
+// Update property status (Suspend/Activate) - Admins only
+router.patch("/:id/status", validateToken, checkRole(["Admin"]), propertyController.updatePropertyStatus)
+
+router.get("/:id/availability", propertyController.getPropertyAvailability)
+router.post("/:id/availability", validateToken, checkRole(["Host", "Admin"]), propertyController.addPropertyUnavailableRange)
+router.delete("/:id/availability/:rangeId", validateToken, checkRole(["Host", "Admin"]), propertyController.removePropertyUnavailableRange)
+
 module.exports = router

@@ -18,6 +18,7 @@ const paymentRoutes = require("./src/routes/PaymentRoutes")
 const messageRoutes = require("./src/routes/MessageRoutes")
 const verificationRoutes = require("./src/routes/VerificationRoutes")
 const hostRoutes = require("./src/routes/HostRoutes")
+const disputeRoutes = require("./src/routes/DisputeRoutes")
 
 app.use("/users", userRoutes)
 app.use("/properties", propertyRoutes)
@@ -28,6 +29,7 @@ app.use("/payments", paymentRoutes)
 app.use("/messages", messageRoutes)
 app.use("/verifications", verificationRoutes)
 app.use("/hosts", hostRoutes)
+app.use("/disputes", disputeRoutes)
 
 
 

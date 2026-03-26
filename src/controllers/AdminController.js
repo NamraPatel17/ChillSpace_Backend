@@ -1,43 +1,29 @@
-const AdminActivity = require("../models/AdminActivityModel")
-
-
-// CREATE ACTIVITY LOG
-exports.createActivity = async (req,res)=>{
-    try{
-
-        const activity = new AdminActivity(req.body)
-        const savedActivity = await activity.save()
-
-        res.status(201).json({
-            message:"Activity logged",
-            data:savedActivity
-        })
-
-    }catch(err){
-        res.status(500).json({message:err.message})
-    }
-}
-
-
-// GET ALL ACTIVITIES
-exports.getAllActivities = async (req,res)=>{
-    try{
-
-        const activities = await AdminActivity.find()
-        .populate("adminId","fullName email")
-
-        res.status(200).json(activities)
-
-    }catch(err){
-        res.status(500).json({message:err.message})
-    }
-}
-
-// GET ADMIN ANALYTICS
 const User = require("../models/UserModel")
 const Property = require("../models/PropertyModel")
 const Booking = require("../models/BookingModel")
 const Review = require("../models/ReviewModel")
+const AdminActivity = require("../models/AdminActivityModel")
+
+// CREATE ACTIVITY LOG
+exports.createActivity = async (req,res)=>{
+    try{
+        const activity = new AdminActivity(req.body)
+        const savedActivity = await activity.save()
+        res.status(201).json({ message:"Activity logged", data:savedActivity })
+    }catch(err){
+        res.status(500).json({message:err.message})
+    }
+}
+
+// GET ALL ACTIVITIES
+exports.getAllActivities = async (req,res)=>{
+    try{
+        const activities = await AdminActivity.find().populate("adminId","fullName email")
+        res.status(200).json(activities)
+    }catch(err){
+        res.status(500).json({message:err.message})
+    }
+}
 
 exports.getAdminAnalytics = async (req, res) => {
     try {
@@ -528,6 +514,26 @@ exports.deleteUser = async (req, res) => {
         const user = await User.findByIdAndUpdate(id, { accountStatus: "Deleted" }, { new: true });
         if (!user) return res.status(404).json({ message: "User not found" });
         res.status(200).json({ message: "User deleted successfully", user });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+}
+
+// UPDATE BOOKING STATUS (ADMIN)
+exports.updateBookingStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body; 
+
+        const booking = await Booking.findByIdAndUpdate(
+            id,
+            { bookingStatus: status },
+            { new: true }
+        ).populate("guestId", "fullName email").populate("propertyId", "title");
+
+        if (!booking) return res.status(404).json({ message: "Booking not found" });
+
+        res.status(200).json({ message: `Booking status updated to ${status}`, booking });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
