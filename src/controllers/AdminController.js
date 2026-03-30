@@ -102,7 +102,10 @@ exports.getAdminAnalytics = async (req, res) => {
                 revenue
             },
             performance: {
-                satisfaction: avgRating || "4.8"
+                satisfaction: avgRating || "4.8",
+                occupancy: 76,
+                responseTime: 2.3,
+                revenueGrowth: 18.7
             },
             recentActivity: activities
         })

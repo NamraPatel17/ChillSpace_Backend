@@ -1,5 +1,6 @@
 const Property = require("../models/PropertyModel")
 const Booking = require("../models/BookingModel")
+const Review = require("../models/ReviewModel")
 
 // GET HOST ANALYTICS
 exports.getHostAnalytics = async (req, res) => {
@@ -76,6 +77,10 @@ exports.getHostBookings = async (req, res) => {
             .populate("propertyId", "title")
             .populate("guestId", "fullName email")
 
+        // Pre-fetch all reviews written by this host to determine which guests have been rated
+        const hostReviews = await Review.find({ hostReviewer: hostId, reviewType: "guest" })
+        const reviewedBookingIds = new Set(hostReviews.map(r => r.bookingId?.toString()))
+
         const formattedBookings = bookings.map(b => ({
             id: b._id,
             property: b.propertyId ? b.propertyId.title : "Unknown Property",
@@ -85,7 +90,8 @@ exports.getHostBookings = async (req, res) => {
             checkOut: new Date(b.checkOutDate).toLocaleDateString(),
             nights: Math.ceil((new Date(b.checkOutDate) - new Date(b.checkInDate)) / (1000 * 60 * 60 * 24)),
             amount: `$${b.totalPrice}`,
-            status: b.bookingStatus
+            status: b.bookingStatus,
+            isRatedByHost: reviewedBookingIds.has(b._id.toString())
         }))
 
         // Stats to power the top of the bookings page
@@ -93,7 +99,8 @@ exports.getHostBookings = async (req, res) => {
             total: bookings.length,
             confirmed: bookings.filter(b => b.bookingStatus === "Confirmed").length,
             pending: bookings.filter(b => b.bookingStatus === "Pending").length,
-            cancelled: bookings.filter(b => b.bookingStatus === "Cancelled").length
+            cancelled: bookings.filter(b => b.bookingStatus === "Cancelled").length,
+            completed: bookings.filter(b => b.bookingStatus === "Completed").length
         }
 
         res.status(200).json({ bookings: formattedBookings, stats })
@@ -120,6 +127,7 @@ exports.getHostEarnings = async (req, res) => {
 
         let totalEarnings = 0
         let thisMonthEarnings = 0
+        let thisMonthBookingsCount = 0
         let pendingPayouts = 0
 
         const currentDate = new Date()
@@ -144,9 +152,10 @@ exports.getHostEarnings = async (req, res) => {
                 if (!monthlyData[monthName]) monthlyData[monthName] = 0
                 monthlyData[monthName] += payout
                 
-                // Track this month's earnings
+                // Track this month's earnings AND bookings
                 if (date.getMonth() === currentMonth && date.getFullYear() === currentYear) {
                     thisMonthEarnings += payout
+                    thisMonthBookingsCount++
                 }
 
                 // Add to transactions history
@@ -186,7 +195,7 @@ exports.getHostEarnings = async (req, res) => {
         res.status(200).json({
             totalEarnings,
             thisMonthEarnings,
-            thisMonthBookingsCount: transactions.filter(t => new Date(t.date).getMonth() === currentMonth).length,
+            thisMonthBookingsCount,
             pendingPayouts,
             pendingCount: transactions.filter(t => t.status === "Pending").length,
             averagePerBooking,
@@ -206,9 +215,22 @@ exports.getHostProperties = async (req, res) => {
 
         const properties = await Property.find({ hostId }).sort({ createdAt: -1 })
         
+        const propertyIds = properties.map(p => p._id)
+        const Review = require("../models/ReviewModel")
+        const allReviews = await Review.find({ propertyId: { $in: propertyIds }, reviewType: "property" }).lean()
+
         const propertiesWithStats = await Promise.all(properties.map(async (p) => {
             const bookingsCount = await Booking.countDocuments({ propertyId: p._id, bookingStatus: { $in: ["Confirmed", "Completed", "Pending"] } })
             
+            const propReviews = allReviews.filter(r => r.propertyId && r.propertyId.toString() === p._id.toString())
+            let calculatedRating = 0
+            if (propReviews.length > 0) {
+                const sum = propReviews.reduce((acc, curr) => acc + (curr.rating || 5), 0)
+                calculatedRating = Number((sum / propReviews.length).toFixed(1))
+            } else {
+                calculatedRating = 0
+            }
+
             return {
                 id: p._id,
                 name: p.title,
@@ -217,7 +239,7 @@ exports.getHostProperties = async (req, res) => {
                 price: `$${p.pricePerNight}`,
                 status: p.availabilityStatus ? "Active" : "Inactive",
                 bookings: bookingsCount,
-                rating: p.rating || 0,
+                rating: calculatedRating,
                 views: Math.floor(Math.random() * 300) + 50 // mock views since we don't track page hits yet
             }
         }))
@@ -230,7 +252,6 @@ exports.getHostProperties = async (req, res) => {
 }
 
 // GET HOST REVIEWS
-const Review = require("../models/ReviewModel")
 
 exports.getHostReviews = async (req, res) => {
     try {
@@ -240,8 +261,11 @@ exports.getHostReviews = async (req, res) => {
         const properties = await Property.find({ hostId })
         const propertyIds = properties.map(p => p._id)
 
-        // Find all reviews for these properties
-        const reviews = await Review.find({ propertyId: { $in: propertyIds } })
+        // Find all reviews for these properties, excluding host-written guest reviews
+        const reviews = await Review.find({ 
+            propertyId: { $in: propertyIds },
+            $or: [{ reviewType: "property" }, { reviewType: { $exists: false } }]
+        })
             .sort({ createdAt: -1 })
             .populate("propertyId", "title")
             .populate("guestId", "fullName")

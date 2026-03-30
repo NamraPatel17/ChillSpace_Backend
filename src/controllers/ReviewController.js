@@ -14,6 +14,11 @@ exports.addReview = async (req,res)=>{
         const review = new Review(reviewData)
         const savedReview = await review.save()
 
+        // Sync flag back to specific booking
+        if (reviewData.bookingId) {
+            await Booking.findByIdAndUpdate(reviewData.bookingId, { isReviewed: true });
+        }
+
         res.status(201).json({
             message:"Review added successfully",
             data:savedReview
@@ -77,9 +82,15 @@ exports.addGuestReview = async (req, res) => {
             return res.status(400).json({ message: "Can only review guests for completed bookings" })
         }
 
+        const existingReview = await Review.findOne({ bookingId, reviewType: "guest" })
+        if (existingReview) {
+            return res.status(400).json({ message: "You have already submitted a review for this booking" })
+        }
+
         const review = new Review({
             guestId: booking.guestId,
             propertyId: booking.propertyId,
+            bookingId: booking._id,
             reviewType: "guest",
             hostReviewer: hostId,
             rating,
@@ -88,6 +99,44 @@ exports.addGuestReview = async (req, res) => {
         await review.save()
 
         res.status(201).json({ message: "Guest review submitted", review })
+    } catch (err) {
+        res.status(500).json({ message: err.message })
+    }
+}
+
+// HOST RESPONDS TO REVIEW
+exports.respondToReview = async (req, res) => {
+    try {
+        const { response } = req.body
+        const reviewId = req.params.id
+
+        if (!response || !response.trim()) {
+            return res.status(400).json({ message: "Response text is required" })
+        }
+
+        const review = await Review.findById(reviewId)
+        if (!review) return res.status(404).json({ message: "Review not found" })
+
+        review.hostResponse = response.trim()
+        await review.save()
+
+        res.status(200).json({ message: "Response attached successfully", review })
+    } catch (err) {
+        res.status(500).json({ message: err.message })
+    }
+}
+
+// GET REVIEWS WRITTEN ABOUT GUEST
+exports.getMyGuestReviews = async (req, res) => {
+    try {
+        const guestId = req.user._id
+        
+        const reviews = await Review.find({ guestId, reviewType: "guest" })
+            .populate("hostReviewer", "fullName profilePicture")
+            .populate("propertyId", "title")
+            .sort({ createdAt: -1 })
+            
+        res.status(200).json(reviews)
     } catch (err) {
         res.status(500).json({ message: err.message })
     }

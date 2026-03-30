@@ -113,8 +113,26 @@ exports.getAllProperties = async (req,res)=>{
 
         const properties = await Property.find(filter)
         .populate("hostId","fullName email")
+        .lean()
 
-        res.status(200).json(properties)
+        // Sync with true reviews count and average rating dynamically
+        const Review = require("../models/ReviewModel")
+        const allReviews = await Review.find({ reviewType: "property" }).lean()
+
+        const propertiesWithStats = properties.map(property => {
+            const propReviews = allReviews.filter(r => r.propertyId && r.propertyId.toString() === property._id.toString())
+            if (propReviews.length > 0) {
+                const sum = propReviews.reduce((acc, curr) => acc + (curr.rating || 5), 0)
+                property.rating = Number((sum / propReviews.length).toFixed(1))
+                property.reviewsCount = propReviews.length
+            } else {
+                property.rating = 0
+                property.reviewsCount = 0
+            }
+            return property
+        })
+
+        res.status(200).json(propertiesWithStats)
 
     }catch(err){
         res.status(500).json({message:err.message})
@@ -128,9 +146,22 @@ exports.getPropertyById = async (req,res)=>{
 
         const property = await Property.findById(req.params.id)
         .populate("hostId")
+        .lean()
 
         if(!property){
             return res.status(404).json({message:"Property not found"})
+        }
+
+        // Attach computed stats
+        const Review = require("../models/ReviewModel")
+        const propReviews = await Review.find({ propertyId: req.params.id, reviewType: "property" }).lean()
+        if (propReviews.length > 0) {
+            const sum = propReviews.reduce((acc, curr) => acc + (curr.rating || 5), 0)
+            property.rating = Number((sum / propReviews.length).toFixed(1))
+            property.reviewsCount = propReviews.length
+        } else {
+            property.rating = 0
+            property.reviewsCount = 0
         }
 
         res.status(200).json(property)

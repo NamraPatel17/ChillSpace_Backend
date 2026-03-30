@@ -62,6 +62,20 @@ const userSchema = new mongoose.Schema({
         marketing: { type: Boolean, default: false }
     },
 
+    payoutMethod: {
+        bankName: { type: String, default: "" },
+        accountName: { type: String, default: "" },
+        accountNumber: { type: String, default: "" },
+        routingNumber: { type: String, default: "" }
+    },
+
+    paymentMethod: {
+        cardNumber: { type: String, default: "" },
+        expiryDate: { type: String, default: "" },
+        cvv: { type: String, default: "" },
+        nameOnCard: { type: String, default: "" }
+    },
+
     resetPasswordToken: {
         type: String
     },

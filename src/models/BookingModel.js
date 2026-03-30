@@ -38,6 +38,11 @@ const bookingSchema = new mongoose.Schema({
     type:String,
     enum:["Pending","Paid"],
     default:"Pending"
+    },
+
+    isReviewed:{
+        type:Boolean,
+        default:false
     }
 
 },{timestamps:true})
