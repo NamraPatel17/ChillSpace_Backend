@@ -37,4 +37,9 @@ router.put("/users/:id/unsuspend", validateToken, checkRole(["Admin"]), adminCon
 router.put("/users/:id/delete", validateToken, checkRole(["Admin"]), adminController.deleteUser)
 router.put("/bookings/:id/status", validateToken, checkRole(["Admin"]), adminController.updateBookingStatus)
 
+// Verification Endpoints
+router.get("/verifications", validateToken, checkRole(["Admin"]), adminController.getPendingVerifications)
+router.patch("/verifications/:id/approve", validateToken, checkRole(["Admin"]), adminController.approveVerification)
+router.patch("/verifications/:id/reject", validateToken, checkRole(["Admin"]), adminController.rejectVerification)
+
 module.exports = router

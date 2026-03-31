@@ -65,8 +65,8 @@ exports.getConversations = async (req, res) => {
             $or: [{ senderId: userId }, { receiverId: userId }]
         })
         .sort({ createdAt: -1 })
-        .populate("senderId", "fullName email")
-        .populate("receiverId", "fullName email")
+        .populate("senderId", "fullName email profilePicture")
+        .populate("receiverId", "fullName email profilePicture")
         .populate("propertyId", "title");
 
         const convs = [];
@@ -91,7 +91,8 @@ exports.getConversations = async (req, res) => {
                     lastMessage: msg.content,
                     timestamp: new Date(msg.createdAt).toLocaleDateString([], {hour: '2-digit', minute:'2-digit'}),
                     unread: unreadCount,
-                    avatar: otherUser.fullName.substring(0, 2).toUpperCase()
+                    avatar: otherUser.fullName.substring(0, 2).toUpperCase(),
+                    profilePicture: otherUser.profilePicture || ""
                 });
             } else {
                 const existing = convs.find(c => c.id === otherId);

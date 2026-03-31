@@ -541,3 +541,79 @@ exports.updateBookingStatus = async (req, res) => {
         res.status(500).json({ message: err.message });
     }
 }
+
+// GET ALL PENDING VERIFICATIONS (ADMIN)
+exports.getPendingVerifications = async (req, res) => {
+    try {
+        const users = await User.find({ 
+            "idDocuments": { $not: { $size: 0 } }, 
+            "idDocuments.status": "Pending" 
+        }).select("fullName email role profilePicture idDocuments verificationStatus createdAt");
+        
+        const formattedUsers = users.map(u => {
+            const pendingDoc = u.idDocuments.find(d => d.status === "Pending");
+            return {
+                id: u._id,
+                name: u.fullName,
+                email: u.email,
+                role: u.role,
+                profilePicture: u.profilePicture,
+                documentUrl: pendingDoc ? pendingDoc.url : null,
+                documentId: pendingDoc ? pendingDoc._id : null,
+                submittedAt: pendingDoc ? new Date(pendingDoc.uploadedAt).toLocaleDateString() : null
+            }
+        }).filter(u => u.documentUrl !== null);
+
+        res.status(200).json({ pendingVerifications: formattedUsers });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+}
+
+// APPROVE VERIFICATION (ADMIN)
+exports.approveVerification = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { documentId } = req.body;
+
+        const user = await User.findOneAndUpdate(
+            { _id: id, "idDocuments._id": documentId },
+            { 
+                $set: { 
+                    "idDocuments.$.status": "Approved",
+                    "verificationStatus": true
+                }
+            },
+            { new: true }
+        );
+
+        if (!user) return res.status(404).json({ message: "User or Document not found" });
+        res.status(200).json({ message: "Verification approved successfully", user });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+}
+
+// REJECT VERIFICATION (ADMIN)
+exports.rejectVerification = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { documentId } = req.body;
+
+        const user = await User.findOneAndUpdate(
+            { _id: id, "idDocuments._id": documentId },
+            { 
+                $set: { 
+                    "idDocuments.$.status": "Rejected",
+                    "verificationStatus": false
+                }
+            },
+            { new: true }
+        );
+
+        if (!user) return res.status(404).json({ message: "User or Document not found" });
+        res.status(200).json({ message: "Verification rejected", user });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+}

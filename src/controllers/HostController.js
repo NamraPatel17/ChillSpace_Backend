@@ -268,7 +268,7 @@ exports.getHostReviews = async (req, res) => {
         })
             .sort({ createdAt: -1 })
             .populate("propertyId", "title")
-            .populate("guestId", "fullName")
+            .populate("guestId", "fullName profilePicture")
 
         let totalScore = 0
         const stats = {
@@ -294,6 +294,7 @@ exports.getHostReviews = async (req, res) => {
                 id: r._id,
                 property: r.propertyId ? r.propertyId.title : "Unknown Property",
                 guest: r.guestId ? r.guestId.fullName : "Unknown Guest",
+                guestPicture: r.guestId ? r.guestId.profilePicture || "" : "",
                 rating: rating,
                 date: new Date(r.createdAt).toLocaleDateString(),
                 comment: r.reviewText,

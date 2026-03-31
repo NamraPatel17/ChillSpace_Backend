@@ -3,6 +3,7 @@ const bcrypt = require("bcrypt")
 const mailSend = require("../utils/MailUtil")
 const jwt = require("jsonwebtoken")
 const crypto = require("crypto")
+const uploadToCloudinary = require("../utils/CloudinaryUtil")
 const secret = "secret"
 
 const registerUser = async(req,res)=>{
@@ -209,11 +210,76 @@ const resetPassword = async (req, res) => {
     }
 }
 
+// UPLOAD PROFILE PHOTO
+const uploadProfilePhoto = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        
+        if (!req.file) {
+            return res.status(400).json({ message: "No image file provided" });
+        }
+
+        // Upload to Cloudinary using existing utility
+        const cloudinaryResponse = await uploadToCloudinary(req.file.path);
+
+        // Update user
+        const updatedUser = await userSchema.findByIdAndUpdate(
+            userId,
+            { profilePicture: cloudinaryResponse.secure_url },
+            { new: true }
+        ).select("-password");
+
+        res.status(200).json({
+            message: "Profile photo updated successfully",
+            profilePicture: cloudinaryResponse.secure_url,
+            user: updatedUser
+        });
+
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+}
+
+// UPLOAD ID DOCUMENT
+const uploadIdDocument = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        
+        if (!req.file) {
+            return res.status(400).json({ message: "No document file provided" });
+        }
+
+        const cloudinaryResponse = await uploadToCloudinary(req.file.path);
+
+        const newDoc = {
+            url: cloudinaryResponse.secure_url,
+            status: "Pending",
+            uploadedAt: new Date()
+        }
+
+        const updatedUser = await userSchema.findByIdAndUpdate(
+            userId,
+            { $push: { idDocuments: newDoc }, verificationStatus: false }, // resets full trust until Admin explicitly approves all scans
+            { new: true }
+        ).select("-password");
+
+        res.status(200).json({
+            message: "ID Document securely uploaded and queued for Admin verification.",
+            idDocuments: updatedUser.idDocuments
+        });
+
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+}
+
 module.exports = {
     registerUser,
     loginUser,
     getProfile,
     updateProfile,
     forgotPassword,
-    resetPassword
+    resetPassword,
+    uploadProfilePhoto,
+    uploadIdDocument
 }
