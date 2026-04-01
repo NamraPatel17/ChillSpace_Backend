@@ -28,82 +28,86 @@ exports.getAllActivities = async (req,res)=>{
 exports.getAdminAnalytics = async (req, res) => {
     try {
         // 1. Basic Counts
-        const totalUsers = await User.countDocuments()
+        const totalUsers = await User.countDocuments({ accountStatus: { $ne: "Deleted" } })
         const activeListings = await Property.countDocuments({ availabilityStatus: true })
-        const totalBookings = await Booking.countDocuments()
+        const allBookings = await Booking.find()
 
-        // 2. Revenue Calculation
-        const completedBookings = await Booking.find({ 
-            bookingStatus: { $in: ["Confirmed", "Completed"] } 
+        const totalBookings   = allBookings.length
+        const confirmedCount  = allBookings.filter(b => b.bookingStatus === "Confirmed").length
+        const pendingCount    = allBookings.filter(b => b.bookingStatus === "Pending").length
+        const cancelledCount  = allBookings.filter(b => b.bookingStatus === "Cancelled").length
+        const completedCount  = allBookings.filter(b => b.bookingStatus === "Completed").length
+
+        // 2. Revenue – confirmed + completed only
+        const revenue = allBookings
+            .filter(b => b.bookingStatus === "Confirmed" || b.bookingStatus === "Completed")
+            .reduce((sum, b) => sum + (b.totalPrice || 0), 0)
+
+        // 3. Occupancy rate (active bookings ÷ total)
+        const occupancyRate = totalBookings > 0
+            ? Math.round(((confirmedCount + completedCount) / totalBookings) * 100)
+            : 0
+
+        // 4. Avg rating – property reviews only
+        const propertyReviews = await Review.find({
+            $or: [{ reviewType: "property" }, { reviewType: { $exists: false } }]
         })
-        const revenue = completedBookings.reduce((sum, b) => sum + (b.totalPrice || 0), 0)
-
-        // 3. Platform Performance (Avg Rating)
-        const reviews = await Review.find()
-        let avgRating = 0
-        if (reviews.length > 0) {
-            const sum = reviews.reduce((acc, r) => acc + (r.rating || 0), 0)
-            avgRating = (sum / reviews.length).toFixed(1)
+        let avgRating = "0.0"
+        if (propertyReviews.length > 0) {
+            const sum = propertyReviews.reduce((acc, r) => acc + (r.rating || 0), 0)
+            avgRating = (sum / propertyReviews.length).toFixed(1)
         }
 
-        // 4. Recent Activity (Merging recent bookings, properties, and reviews)
-        const recentBookings = await Booking.find().sort({ createdAt: -1 }).limit(5).populate("guestId", "fullName").populate("propertyId", "title")
-        const recentProperties = await Property.find().sort({ createdAt: -1 }).limit(5).populate("hostId", "fullName")
-        const recentReviews = await Review.find().sort({ createdAt: -1 }).limit(5).populate("guestId", "fullName").populate("propertyId", "title")
+        // 5. Recent Activity
+        const recentBookings    = await Booking.find().sort({ createdAt: -1 }).limit(5).populate("guestId", "fullName").populate("propertyId", "title")
+        const recentProperties  = await Property.find().sort({ createdAt: -1 }).limit(5).populate("hostId", "fullName")
+        const recentReviews     = await Review.find({ $or: [{ reviewType: "property" }, { reviewType: { $exists: false } }] }).sort({ createdAt: -1 }).limit(5).populate("guestId", "fullName").populate("propertyId", "title")
 
         let activities = []
 
         recentBookings.forEach(b => {
             activities.push({
-                user: b.guestId ? b.guestId.fullName : "Unknown Guest",
+                user: b.guestId?.fullName || "Unknown Guest",
                 action: "Made a booking",
-                property: b.propertyId ? b.propertyId.title : "Unknown Property",
+                property: b.propertyId?.title || "Unknown Property",
                 date: b.createdAt
             })
         })
-
         recentProperties.forEach(p => {
             activities.push({
-                user: p.hostId ? p.hostId.fullName : "Unknown Host",
+                user: p.hostId?.fullName || "Unknown Host",
                 action: "Listed a new property",
                 property: p.title,
                 date: p.createdAt
             })
         })
-
         recentReviews.forEach(r => {
             activities.push({
-                user: r.guestId ? r.guestId.fullName : "Unknown Guest",
+                user: r.guestId?.fullName || "Unknown Guest",
                 action: "Left a review",
-                property: r.propertyId ? r.propertyId.title : "Unknown Property",
+                property: r.propertyId?.title || "Unknown Property",
                 date: r.createdAt
             })
         })
 
-        // Sort combined activities by date descending and take top 5
         activities.sort((a, b) => new Date(b.date) - new Date(a.date))
-        activities = activities.slice(0, 5).map(a => {
-            // simple relative time formatting mock
-            const diffHours = Math.floor((new Date() - new Date(a.date)) / (1000 * 60 * 60))
-            const timeStr = diffHours < 1 ? "Just now" : `${diffHours} hours ago`
-            return {
-                user: a.user,
-                action: a.action,
-                property: a.property,
-                time: timeStr
-            }
+        activities = activities.slice(0, 8).map(a => {
+            const diffMins  = Math.floor((new Date() - new Date(a.date)) / (1000 * 60))
+            const diffHours = Math.floor(diffMins / 60)
+            const diffDays  = Math.floor(diffHours / 24)
+            const timeStr   = diffMins < 1 ? "Just now"
+                            : diffMins < 60 ? `${diffMins}m ago`
+                            : diffHours < 24 ? `${diffHours}h ago`
+                            : `${diffDays}d ago`
+            return { user: a.user, action: a.action, property: a.property, time: timeStr }
         })
 
         res.status(200).json({
-            stats: {
-                totalUsers,
-                activeListings,
-                totalBookings,
-                revenue
-            },
+            stats: { totalUsers, activeListings, totalBookings, revenue },
+            bookingBreakdown: { confirmed: confirmedCount, pending: pendingCount, cancelled: cancelledCount, completed: completedCount },
             performance: {
-                satisfaction: avgRating || "4.8",
-                occupancy: 76,
+                satisfaction: avgRating,
+                occupancy: occupancyRate,
                 responseTime: 2.3,
                 revenueGrowth: 18.7
             },
@@ -239,6 +243,12 @@ exports.getAllPayments = async (req, res) => {
             } else if (b.bookingStatus === 'Pending') {
                 processing += amount;
             }
+            // Cancelled bookings: don't add to any sum
+
+            const txStatus =
+                b.bookingStatus === 'Confirmed' || b.bookingStatus === 'Completed' ? 'Completed' :
+                b.bookingStatus === 'Cancelled' ? 'Cancelled' :
+                'Processing';
 
             return {
                 id: "TX-" + b._id.toString().substring(b._id.toString().length - 8).toUpperCase(),
@@ -249,7 +259,7 @@ exports.getAllPayments = async (req, res) => {
                 amount: amount,
                 platformFee: fee,
                 hostPayout: payout,
-                status: b.bookingStatus === 'Confirmed' || b.bookingStatus === 'Completed' ? 'Completed' : 'Processing'
+                status: txStatus
             };
         });
 
@@ -357,7 +367,8 @@ exports.getAllProperties = async (req, res) => {
 exports.getAllReviews = async (req, res) => {
     try {
         const reviews = await Review.find()
-            .populate("guestId", "fullName")
+            .populate("guestId", "fullName profilePicture")
+            .populate("hostReviewer", "fullName profilePicture")
             .populate({
                 path: "propertyId",
                 select: "title hostId",
@@ -369,29 +380,41 @@ exports.getAllReviews = async (req, res) => {
         let fiveStarCount = 0;
         const distMap = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
 
-        const formattedReviews = reviews.map(r => {
+        const propertyReviews = reviews.filter(r => r.reviewType === "property" || !r.reviewType);
+        const guestReviews    = reviews.filter(r => r.reviewType === "guest");
+
+        const formattedPropertyReviews = propertyReviews.map(r => {
             const rating = r.rating || 0;
             totalPoints += rating;
             if (rating === 5) fiveStarCount++;
-            
             const bucket = Math.round(rating);
-            if (bucket >= 1 && bucket <= 5) {
-                distMap[bucket]++;
-            }
-
+            if (bucket >= 1 && bucket <= 5) distMap[bucket]++;
             return {
                 id: r._id,
                 guest: r.guestId?.fullName || "Unknown Guest",
+                guestPicture: r.guestId?.profilePicture || "",
                 host: r.propertyId?.hostId?.fullName || "Unknown Host",
                 property: r.propertyId?.title || "Unknown Property",
-                rating: rating,
-                comment: r.comment || "",
+                rating,
+                reviewText: r.reviewText || "",
                 date: new Date(r.createdAt).toLocaleDateString(),
-                verified: true 
+                verified: true
             };
         });
 
-        const total = reviews.length;
+        const formattedGuestReviews = guestReviews.map(r => ({
+            id: r._id,
+            reviewer: r.hostReviewer?.fullName || "Unknown Host",
+            reviewerPicture: r.hostReviewer?.profilePicture || "",
+            guest: r.guestId?.fullName || "Unknown Guest",
+            guestPicture: r.guestId?.profilePicture || "",
+            property: r.propertyId?.title || "Unknown Property",
+            rating: r.rating || 0,
+            reviewText: r.reviewText || "",
+            date: new Date(r.createdAt).toLocaleDateString(),
+        }));
+
+        const total = propertyReviews.length;
         const averageRating = total > 0 ? (totalPoints / total).toFixed(1) : "0.0";
 
         const distribution = [
@@ -402,14 +425,42 @@ exports.getAllReviews = async (req, res) => {
             { stars: 1, count: distMap[1], percentage: total > 0 ? Math.round((distMap[1] / total) * 100) : 0 },
         ];
 
-        const stats = {
-            total,
-            averageRating,
-            fiveStar: fiveStarCount,
-            verified: total
-        };
+        // Guest review distribution
+        const guestDistMap = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+        let guestFiveStarCount = 0;
+        let guestTotalPoints = 0;
+        guestReviews.forEach(r => {
+            const rating = r.rating || 0;
+            guestTotalPoints += rating;
+            if (rating === 5) guestFiveStarCount++;
+            const bucket = Math.round(rating);
+            if (bucket >= 1 && bucket <= 5) guestDistMap[bucket]++;
+        });
+        const guestTotal = guestReviews.length;
+        const guestAvgRating = guestTotal > 0 ? (guestTotalPoints / guestTotal).toFixed(1) : "0.0";
+        const guestDistribution = [
+            { stars: 5, count: guestDistMap[5], percentage: guestTotal > 0 ? Math.round((guestDistMap[5] / guestTotal) * 100) : 0 },
+            { stars: 4, count: guestDistMap[4], percentage: guestTotal > 0 ? Math.round((guestDistMap[4] / guestTotal) * 100) : 0 },
+            { stars: 3, count: guestDistMap[3], percentage: guestTotal > 0 ? Math.round((guestDistMap[3] / guestTotal) * 100) : 0 },
+            { stars: 2, count: guestDistMap[2], percentage: guestTotal > 0 ? Math.round((guestDistMap[2] / guestTotal) * 100) : 0 },
+            { stars: 1, count: guestDistMap[1], percentage: guestTotal > 0 ? Math.round((guestDistMap[1] / guestTotal) * 100) : 0 },
+        ];
 
-        res.status(200).json({ reviews: formattedReviews, stats, distribution });
+        const stats = { total, averageRating, fiveStar: fiveStarCount, verified: total, guestAvgRating, guestFiveStar: guestFiveStarCount };
+
+        res.status(200).json({ reviews: formattedPropertyReviews, guestReviews: formattedGuestReviews, stats, distribution, guestDistribution });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+}
+
+// DELETE REVIEW (ADMIN)
+exports.deleteReview = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const review = await Review.findByIdAndDelete(id);
+        if (!review) return res.status(404).json({ message: "Review not found" });
+        res.status(200).json({ message: "Review deleted successfully" });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
@@ -418,7 +469,7 @@ exports.getAllReviews = async (req, res) => {
 // GET ALL USERS (ADMIN)
 exports.getAllUsers = async (req, res) => {
     try {
-        const users = await User.find().sort({ createdAt: -1 });
+        const users = await User.find({ accountStatus: { $ne: "Deleted" } }).sort({ createdAt: -1 });
 
         // Efficiently load relationships to avoid N+1 queries
         // Group properties by host

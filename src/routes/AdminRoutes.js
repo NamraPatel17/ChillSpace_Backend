@@ -26,6 +26,8 @@ router.get("/properties", validateToken, checkRole(["Admin"]), adminController.g
 
 // Get all reviews
 router.get("/reviews", validateToken, checkRole(["Admin"]), adminController.getAllReviews)
+// Delete a review
+router.delete("/reviews/:id", validateToken, checkRole(["Admin"]), adminController.deleteReview)
 
 // Get all users
 router.get("/users", validateToken, checkRole(["Admin"]), adminController.getAllUsers)

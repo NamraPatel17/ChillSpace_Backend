@@ -35,8 +35,9 @@ exports.getReviewsByProperty = async (req,res)=>{
     try{
 
         const reviews = await Review.find({
-            propertyId:req.params.propertyId
-        }).populate("guestId","fullName profilePicture")
+            propertyId: req.params.propertyId,
+            $or: [{ reviewType: "property" }, { reviewType: { $exists: false } }]
+        }).populate("guestId", "fullName profilePicture")
 
         res.status(200).json(reviews)
 
