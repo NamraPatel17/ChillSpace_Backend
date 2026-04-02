@@ -157,10 +157,10 @@ exports.getHostEarnings = async (req, res) => {
             const date = new Date(b.createdAt)
             const payout = b.totalPrice * 0.90 // 10% platform fee abstraction
 
-            if (b.bookingStatus === "Completed" || b.bookingStatus === "Confirmed") {
+            if (b.bookingStatus === "Completed") {
                 totalEarnings += payout
                 
-                // Track monthly earnings for chart
+                // Track monthly earnings for chart (Completed only)
                 const monthName = monthNames[date.getMonth()]
                 if (!monthlyData[monthName]) monthlyData[monthName] = 0
                 monthlyData[monthName] += payout
@@ -178,12 +178,13 @@ exports.getHostEarnings = async (req, res) => {
                     property: b.propertyId ? b.propertyId.title : "Unknown",
                     guest: b.guestId ? b.guestId.fullName : "Unknown",
                     amount: `$${payout}`,
-                    status: b.bookingStatus === "Completed" ? "Completed" : "Pending"
+                    status: "Completed"
                 })
 
-            } else if (b.bookingStatus === "Pending") {
+            } else if (b.bookingStatus === "Confirmed" || b.bookingStatus === "Pending") {
                 pendingPayouts += payout
 
+                // Add to transactions history
                 transactions.push({
                     id: b._id.toString().slice(-6),
                     date: date.toLocaleDateString(),
