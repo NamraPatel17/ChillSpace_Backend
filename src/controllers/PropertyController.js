@@ -61,9 +61,15 @@ exports.getAllProperties = async (req,res)=>{
         } = req.query
 
         const filter = {}
-
-        if (hostId) {
+        
+        // 1. If not filtering by a specific host (Guest Search/Home), only show Active properties
+        if (!hostId) {
+            filter.availabilityStatus = true
+        } else {
             filter.hostId = hostId
+            // Optional: If we wanted to hide suspended properties even on a host's public profile,
+            // we would add filter.availabilityStatus = true here too.
+            // But since the user said "home and search", we focus on those first.
         }
 
         if(location){
@@ -145,7 +151,7 @@ exports.getPropertyById = async (req,res)=>{
     try{
 
         const property = await Property.findById(req.params.id)
-        .populate("hostId")
+        .populate("hostId", "fullName profilePicture verificationStatus bio createdAt")
         .lean()
 
         if(!property){

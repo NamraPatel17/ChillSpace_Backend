@@ -10,6 +10,12 @@ exports.getHostAnalytics = async (req, res) => {
         // Find all properties owned by this host
         const properties = await Property.find({ hostId })
         const propertyIds = properties.map(p => p._id)
+        
+        // Auto-complete confirmed bookings that are past checkout date
+        await Booking.updateMany(
+            { propertyId: { $in: propertyIds }, bookingStatus: "Confirmed", checkOutDate: { $lt: new Date() } },
+            { bookingStatus: "Completed" }
+        )
 
         // Find all bookings for these properties, sorted by newest first
         const bookings = await Booking.find({ propertyId: { $in: propertyIds } })
@@ -70,12 +76,18 @@ exports.getHostBookings = async (req, res) => {
         // Find all properties owned by this host
         const properties = await Property.find({ hostId })
         const propertyIds = properties.map(p => p._id)
+        
+        // Auto-complete confirmed bookings that are past checkout date
+        await Booking.updateMany(
+            { propertyId: { $in: propertyIds }, bookingStatus: "Confirmed", checkOutDate: { $lt: new Date() } },
+            { bookingStatus: "Completed" }
+        )
 
         // Find all bookings for these properties, sorted by newest check-in
         const bookings = await Booking.find({ propertyId: { $in: propertyIds } })
             .sort({ checkInDate: -1 })
             .populate("propertyId", "title")
-            .populate("guestId", "fullName email")
+            .populate("guestId", "fullName email profilePicture verificationStatus")
 
         // Pre-fetch all reviews written by this host to determine which guests have been rated
         const hostReviews = await Review.find({ hostReviewer: hostId, reviewType: "guest" })
@@ -91,7 +103,8 @@ exports.getHostBookings = async (req, res) => {
             nights: Math.ceil((new Date(b.checkOutDate) - new Date(b.checkInDate)) / (1000 * 60 * 60 * 24)),
             amount: `$${b.totalPrice}`,
             status: b.bookingStatus,
-            isRatedByHost: reviewedBookingIds.has(b._id.toString())
+            isRatedByHost: reviewedBookingIds.has(b._id.toString()),
+            guestVerified: b.guestId?.verificationStatus || false
         }))
 
         // Stats to power the top of the bookings page

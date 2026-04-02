@@ -103,6 +103,11 @@ exports.createBooking = async (req,res)=>{
 // GET ALL BOOKINGS
 exports.getAllBookings = async (req,res)=>{
     try{
+        // Auto-complete confirmed bookings that are past checkout date
+        await Booking.updateMany(
+            { bookingStatus: "Confirmed", checkOutDate: { $lt: new Date() } },
+            { bookingStatus: "Completed" }
+        )
 
         const bookings = await Booking.find()
         .populate("propertyId")
@@ -120,10 +125,17 @@ exports.getAllBookings = async (req,res)=>{
 // GET BOOKINGS BY USER
 exports.getBookingsByGuest = async (req,res)=>{
     try{
+        const guestId = req.params.guestId || req.user?._id;
+
+        // Auto-complete confirmed bookings that are past checkout date for this guest
+        await Booking.updateMany(
+            { guestId, bookingStatus: "Confirmed", checkOutDate: { $lt: new Date() } },
+            { bookingStatus: "Completed" }
+        )
 
         const bookings = await Booking.find({
-            guestId:req.params.guestId
-        }).populate("propertyId").populate("hostId", "fullName")
+            guestId:guestId
+        }).populate("propertyId").populate("hostId", "fullName profilePicture verificationStatus")
 
         res.status(200).json(bookings)
 

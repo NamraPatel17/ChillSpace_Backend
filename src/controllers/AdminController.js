@@ -28,7 +28,14 @@ exports.getAllActivities = async (req,res)=>{
 exports.getAdminAnalytics = async (req, res) => {
     try {
         // 1. Basic Counts
-        const totalUsers = await User.countDocuments({ accountStatus: { $ne: "Deleted" } })
+        const totalUsers = await User.countDocuments({})
+        
+        // Auto-complete confirmed bookings that are past checkout date
+        await Booking.updateMany(
+            { bookingStatus: "Confirmed", checkOutDate: { $lt: new Date() } },
+            { bookingStatus: "Completed" }
+        )
+
         const activeListings = await Property.countDocuments({ availabilityStatus: true })
         const allBookings = await Booking.find()
 
@@ -122,6 +129,12 @@ exports.getAdminAnalytics = async (req, res) => {
 // GET ALL BOOKINGS (ADMIN)
 exports.getAllBookings = async (req, res) => {
     try {
+        // Auto-complete confirmed bookings that are past checkout date
+        await Booking.updateMany(
+            { bookingStatus: "Confirmed", checkOutDate: { $lt: new Date() } },
+            { bookingStatus: "Completed" }
+        )
+
         const bookings = await Booking.find()
             .populate("guestId", "fullName email")
             .populate("propertyId", "title location")
@@ -469,7 +482,7 @@ exports.deleteReview = async (req, res) => {
 // GET ALL USERS (ADMIN)
 exports.getAllUsers = async (req, res) => {
     try {
-        const users = await User.find({ accountStatus: { $ne: "Deleted" } }).sort({ createdAt: -1 });
+        const users = await User.find({}).sort({ createdAt: -1 });
 
         // Efficiently load relationships to avoid N+1 queries
         // Group properties by host
@@ -565,7 +578,7 @@ exports.unsuspendUser = async (req, res) => {
 exports.deleteUser = async (req, res) => {
     try {
         const { id } = req.params;
-        const user = await User.findByIdAndUpdate(id, { accountStatus: "Deleted" }, { new: true });
+        const user = await User.findByIdAndDelete(id);
         if (!user) return res.status(404).json({ message: "User not found" });
         res.status(200).json({ message: "User deleted successfully", user });
     } catch (err) {
