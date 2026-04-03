@@ -76,7 +76,7 @@ exports.getAllDisputes = async (req, res) => {
             host: d.against?.fullName || "Unknown",
             hostEmail: d.against?.email,
             property: d.bookingId ? `Booking #${d.bookingId._id.toString().slice(-6)}` : "N/A",
-            date: new Date(d.createdAt).toLocaleDateString()
+            date: new Date(d.createdAt).toLocaleDateString('en-GB')
         }))
 
         res.status(200).json({ disputes: formatted, stats })

@@ -3,6 +3,14 @@ const Property = require("../models/PropertyModel")
 const Booking = require("../models/BookingModel")
 const Review = require("../models/ReviewModel")
 const AdminActivity = require("../models/AdminActivityModel")
+const Verification = require("../models/VerificationModel")
+
+// PRIVATE HELPER — silently log an admin action
+const logActivity = async (adminId, actionType, description) => {
+    try {
+        await AdminActivity.create({ adminId, actionType, description })
+    } catch (_) { /* non-blocking — never fail a request due to logging */ }
+}
 
 // CREATE ACTIVITY LOG
 exports.createActivity = async (req,res)=>{
@@ -18,7 +26,9 @@ exports.createActivity = async (req,res)=>{
 // GET ALL ACTIVITIES
 exports.getAllActivities = async (req,res)=>{
     try{
-        const activities = await AdminActivity.find().populate("adminId","fullName email")
+        const activities = await AdminActivity.find()
+            .populate("adminId","fullName email")
+            .sort({ createdAt: -1 })
         res.status(200).json(activities)
     }catch(err){
         res.status(500).json({message:err.message})
@@ -265,7 +275,7 @@ exports.getAllPayments = async (req, res) => {
 
             return {
                 id: "TX-" + b._id.toString().substring(b._id.toString().length - 8).toUpperCase(),
-                date: new Date(b.createdAt).toLocaleDateString(),
+                date: new Date(b.createdAt).toLocaleDateString('en-GB'),
                 guest: b.guestId?.fullName || "Unknown",
                 host: b.propertyId?.hostId?.fullName || "Unknown Host",
                 property: b.propertyId?.title || "Unknown Property",
@@ -356,7 +366,7 @@ exports.getAllProperties = async (req, res) => {
                 title: p.title,
                 host: p.hostId?.fullName || "Unknown",
                 location: p.location,
-                price: "$" + p.pricePerNight + "/night",
+                price: "₹" + p.pricePerNight + "/night",
                 rating: rating,
                 status: p.availabilityStatus ? "Active" : "Under Review",
                 bookings: bookingCounts[pIdStr] || 0,
@@ -410,7 +420,7 @@ exports.getAllReviews = async (req, res) => {
                 property: r.propertyId?.title || "Unknown Property",
                 rating,
                 reviewText: r.reviewText || "",
-                date: new Date(r.createdAt).toLocaleDateString(),
+                date: new Date(r.createdAt).toLocaleDateString('en-GB'),
                 verified: true
             };
         });
@@ -424,7 +434,7 @@ exports.getAllReviews = async (req, res) => {
             property: r.propertyId?.title || "Unknown Property",
             rating: r.rating || 0,
             reviewText: r.reviewText || "",
-            date: new Date(r.createdAt).toLocaleDateString(),
+            date: new Date(r.createdAt).toLocaleDateString('en-GB'),
         }));
 
         const total = propertyReviews.length;
@@ -522,7 +532,7 @@ exports.getAllUsers = async (req, res) => {
                 verified: u.verificationStatus || false,
                 properties: propertyCounts[uIdStr] || 0,
                 bookings: bookingCounts[uIdStr] || 0,
-                joined: new Date(u.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short' })
+                joined: new Date(u.createdAt).toLocaleDateString('en-GB')
             };
         });
 
@@ -556,6 +566,7 @@ exports.suspendUser = async (req, res) => {
         const { id } = req.params;
         const user = await User.findByIdAndUpdate(id, { accountStatus: "Suspended" }, { new: true });
         if (!user) return res.status(404).json({ message: "User not found" });
+        await logActivity(req.user._id, "SUSPEND_USER", `Suspended user: ${user.fullName} (${user.email})`);
         res.status(200).json({ message: "User suspended successfully", user });
     } catch (err) {
         res.status(500).json({ message: err.message });
@@ -568,6 +579,7 @@ exports.unsuspendUser = async (req, res) => {
         const { id } = req.params;
         const user = await User.findByIdAndUpdate(id, { accountStatus: "Active" }, { new: true });
         if (!user) return res.status(404).json({ message: "User not found" });
+        await logActivity(req.user._id, "UNSUSPEND_USER", `Reactivated user: ${user.fullName} (${user.email})`);
         res.status(200).json({ message: "User reactivated successfully", user });
     } catch (err) {
         res.status(500).json({ message: err.message });
@@ -580,6 +592,7 @@ exports.deleteUser = async (req, res) => {
         const { id } = req.params;
         const user = await User.findByIdAndDelete(id);
         if (!user) return res.status(404).json({ message: "User not found" });
+        await logActivity(req.user._id, "DELETE_USER", `Deleted user: ${user.fullName} (${user.email})`);
         res.status(200).json({ message: "User deleted successfully", user });
     } catch (err) {
         res.status(500).json({ message: err.message });
@@ -590,7 +603,7 @@ exports.deleteUser = async (req, res) => {
 exports.updateBookingStatus = async (req, res) => {
     try {
         const { id } = req.params;
-        const { status } = req.body; 
+        const { status } = req.body;
 
         const booking = await Booking.findByIdAndUpdate(
             id,
@@ -599,84 +612,77 @@ exports.updateBookingStatus = async (req, res) => {
         ).populate("guestId", "fullName email").populate("propertyId", "title");
 
         if (!booking) return res.status(404).json({ message: "Booking not found" });
-
+        await logActivity(req.user._id, "UPDATE_BOOKING", `Changed booking #${id.slice(-6)} to "${status}" — Property: ${booking.propertyId?.title}`);
         res.status(200).json({ message: `Booking status updated to ${status}`, booking });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
 }
 
-// GET ALL PENDING VERIFICATIONS (ADMIN)
+// GET ALL PENDING VERIFICATIONS (ADMIN) — reads from VerificationModel
 exports.getPendingVerifications = async (req, res) => {
     try {
-        const users = await User.find({ 
-            "idDocuments": { $not: { $size: 0 } }, 
-            "idDocuments.status": "Pending" 
-        }).select("fullName email role profilePicture idDocuments verificationStatus createdAt");
-        
-        const formattedUsers = users.map(u => {
-            const pendingDoc = u.idDocuments.find(d => d.status === "Pending");
-            return {
-                id: u._id,
-                name: u.fullName,
-                email: u.email,
-                role: u.role,
-                profilePicture: u.profilePicture,
-                documentUrl: pendingDoc ? pendingDoc.url : null,
-                documentId: pendingDoc ? pendingDoc._id : null,
-                submittedAt: pendingDoc ? new Date(pendingDoc.uploadedAt).toLocaleDateString() : null
-            }
-        }).filter(u => u.documentUrl !== null);
+        const pendingVerifs = await Verification.find({ status: "Pending" })
+            .populate("userId", "fullName email role profilePicture")
+            .sort({ createdAt: -1 });
 
-        res.status(200).json({ pendingVerifications: formattedUsers });
+        const formatted = pendingVerifs.map(v => ({
+            id: v.userId?._id,
+            verificationId: v._id,
+            name: v.userId?.fullName || "Unknown",
+            email: v.userId?.email || "",
+            role: v.userId?.role || "",
+            profilePicture: v.userId?.profilePicture || "",
+            documentUrl: v.documentUrl,
+            remarks: v.remarks || "",
+            submittedAt: new Date(v.createdAt).toLocaleDateString('en-GB')
+        }));
+
+        res.status(200).json({ pendingVerifications: formatted });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
 }
 
-// APPROVE VERIFICATION (ADMIN)
+// APPROVE VERIFICATION (ADMIN) — updates VerificationModel + sets User.verificationStatus
 exports.approveVerification = async (req, res) => {
     try {
-        const { id } = req.params;
-        const { documentId } = req.body;
+        const { verificationId } = req.body;
 
-        const user = await User.findOneAndUpdate(
-            { _id: id, "idDocuments._id": documentId },
-            { 
-                $set: { 
-                    "idDocuments.$.status": "Approved",
-                    "verificationStatus": true
-                }
-            },
+        const verif = await Verification.findByIdAndUpdate(
+            verificationId,
+            { status: "Approved", remarks: "" },
             { new: true }
-        );
+        ).populate("userId", "fullName email");
 
-        if (!user) return res.status(404).json({ message: "User or Document not found" });
-        res.status(200).json({ message: "Verification approved successfully", user });
+        if (!verif) return res.status(404).json({ message: "Verification request not found" });
+
+        await User.findByIdAndUpdate(verif.userId._id, { verificationStatus: true });
+        await logActivity(req.user._id, "APPROVE_VERIFICATION", `Approved ID verification for ${verif.userId.fullName} (${verif.userId.email})`);
+
+        res.status(200).json({ message: "Verification approved successfully" });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
 }
 
-// REJECT VERIFICATION (ADMIN)
+// REJECT VERIFICATION (ADMIN) — updates VerificationModel + clears User.verificationStatus
 exports.rejectVerification = async (req, res) => {
     try {
-        const { id } = req.params;
-        const { documentId } = req.body;
+        const { verificationId, remarks } = req.body;
 
-        const user = await User.findOneAndUpdate(
-            { _id: id, "idDocuments._id": documentId },
-            { 
-                $set: { 
-                    "idDocuments.$.status": "Rejected",
-                    "verificationStatus": false
-                }
-            },
+        const verif = await Verification.findByIdAndUpdate(
+            verificationId,
+            { status: "Rejected", remarks: remarks || "" },
             { new: true }
-        );
+        ).populate("userId", "fullName email");
 
-        if (!user) return res.status(404).json({ message: "User or Document not found" });
-        res.status(200).json({ message: "Verification rejected", user });
+        if (!verif) return res.status(404).json({ message: "Verification request not found" });
+
+        await User.findByIdAndUpdate(verif.userId._id, { verificationStatus: false });
+        await logActivity(req.user._id, "REJECT_VERIFICATION", `Rejected ID verification for ${verif.userId.fullName} — Reason: ${remarks || "No reason given"}`);
+
+        res.status(200).json({ message: "Verification rejected" });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }

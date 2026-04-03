@@ -1,4 +1,5 @@
 const userSchema = require("../models/UserModel")
+const Verification = require("../models/VerificationModel")
 const bcrypt = require("bcrypt")
 const mailSend = require("../utils/MailUtil")
 const jwt = require("jsonwebtoken")
@@ -240,33 +241,43 @@ const uploadProfilePhoto = async (req, res) => {
     }
 }
 
-// UPLOAD ID DOCUMENT
+// UPLOAD ID DOCUMENT - Saves to dedicated VerificationModel
 const uploadIdDocument = async (req, res) => {
     try {
         const userId = req.user._id;
-        
+
         if (!req.file) {
             return res.status(400).json({ message: "No document file provided" });
         }
 
         const cloudinaryResponse = await uploadToCloudinary(req.file.path);
+        const documentUrl = cloudinaryResponse.secure_url;
 
-        const newDoc = {
-            url: cloudinaryResponse.secure_url,
-            status: "Pending",
-            uploadedAt: new Date()
+        // Check if an existing verification request exists for this user
+        const existing = await Verification.findOne({ userId });
+
+        if (existing) {
+            if (existing.status === "Approved") {
+                return res.status(400).json({ message: "Your identity is already verified." });
+            }
+            if (existing.status === "Pending") {
+                return res.status(400).json({ message: "A verification request is already under review." });
+            }
+            // Rejected — allow resubmission by updating the document
+            existing.documentUrl = documentUrl;
+            existing.status = "Pending";
+            existing.remarks = undefined;
+            await existing.save();
+            // Reset verificationStatus on user until re-approved
+            await userSchema.findByIdAndUpdate(userId, { verificationStatus: false });
+            return res.status(200).json({ message: "Verification document resubmitted successfully." });
         }
 
-        const updatedUser = await userSchema.findByIdAndUpdate(
-            userId,
-            { $push: { idDocuments: newDoc }, verificationStatus: false }, // resets full trust until Admin explicitly approves all scans
-            { new: true }
-        ).select("-password");
+        // New submission
+        await Verification.create({ userId, documentUrl });
+        await userSchema.findByIdAndUpdate(userId, { verificationStatus: false });
 
-        res.status(200).json({
-            message: "ID Document securely uploaded and queued for Admin verification.",
-            idDocuments: updatedUser.idDocuments
-        });
+        res.status(201).json({ message: "ID Document submitted for verification. An admin will review it shortly." });
 
     } catch (err) {
         res.status(500).json({ message: err.message });

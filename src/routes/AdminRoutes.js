@@ -41,7 +41,7 @@ router.put("/bookings/:id/status", validateToken, checkRole(["Admin"]), adminCon
 
 // Verification Endpoints
 router.get("/verifications", validateToken, checkRole(["Admin"]), adminController.getPendingVerifications)
-router.patch("/verifications/:id/approve", validateToken, checkRole(["Admin"]), adminController.approveVerification)
-router.patch("/verifications/:id/reject", validateToken, checkRole(["Admin"]), adminController.rejectVerification)
+router.patch("/verifications/approve", validateToken, checkRole(["Admin"]), adminController.approveVerification)
+router.patch("/verifications/reject", validateToken, checkRole(["Admin"]), adminController.rejectVerification)
 
 module.exports = router

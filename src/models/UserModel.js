@@ -33,12 +33,6 @@ const userSchema = new mongoose.Schema({
         default:false
     },
 
-    idDocuments: [{
-        url: { type: String, required: true },
-        uploadedAt: { type: Date, default: Date.now },
-        status: { type: String, enum: ["Pending", "Approved", "Rejected"], default: "Pending" }
-    }],
-
     accountStatus:{
         type:String,
         enum:["Active","Suspended","Deleted"],

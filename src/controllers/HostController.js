@@ -25,10 +25,8 @@ exports.getHostAnalytics = async (req, res) => {
 
         const totalBookings = bookings.length
         
-        // Calculate Earnings (Only Confirmed or Completed bookings)
-        const validBookings = bookings.filter(b => 
-            b.bookingStatus === "Confirmed" || b.bookingStatus === "Completed"
-        )
+        // Calculate Earnings (Only Completed bookings)
+        const validBookings = bookings.filter(b => b.bookingStatus === "Completed")
         
         let totalEarnings = 0
         validBookings.forEach(booking => {
@@ -49,9 +47,9 @@ exports.getHostAnalytics = async (req, res) => {
             id: b._id,
             property: b.propertyId ? b.propertyId.title : "Unknown Property",
             guest: b.guestId ? b.guestId.fullName : "Unknown Guest",
-            checkIn: new Date(b.checkInDate).toLocaleDateString(),
-            checkOut: new Date(b.checkOutDate).toLocaleDateString(),
-            amount: `$${b.totalPrice}`,
+            checkIn: new Date(b.checkInDate).toLocaleDateString('en-GB'),
+            checkOut: new Date(b.checkOutDate).toLocaleDateString('en-GB'),
+            amount: `₹${b.totalPrice}`,
             status: b.bookingStatus
         }))
 
@@ -83,8 +81,27 @@ exports.getHostBookings = async (req, res) => {
             { bookingStatus: "Completed" }
         )
 
+        const { period } = req.query
+        let dateFilter = {}
+
+        if (period === "last15") {
+            const cutoff = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000)
+            dateFilter.checkInDate = { $gte: cutoff }
+        } else if (period === "lastMonth") {
+            const cutoff = new Date()
+            cutoff.setMonth(cutoff.getMonth() - 1)
+            dateFilter.checkInDate = { $gte: cutoff }
+        } else if (period === "last3Months") {
+            const cutoff = new Date()
+            cutoff.setMonth(cutoff.getMonth() - 3)
+            dateFilter.checkInDate = { $gte: cutoff }
+        }
+
         // Find all bookings for these properties, sorted by newest check-in
-        const bookings = await Booking.find({ propertyId: { $in: propertyIds } })
+        const bookings = await Booking.find({ 
+            propertyId: { $in: propertyIds },
+            ...dateFilter
+        })
             .sort({ checkInDate: -1 })
             .populate("propertyId", "title")
             .populate("guestId", "fullName email profilePicture verificationStatus")
@@ -98,10 +115,10 @@ exports.getHostBookings = async (req, res) => {
             property: b.propertyId ? b.propertyId.title : "Unknown Property",
             guest: b.guestId ? b.guestId.fullName : "Unknown Guest",
             email: b.guestId ? b.guestId.email : "Unknown Email",
-            checkIn: new Date(b.checkInDate).toLocaleDateString(),
-            checkOut: new Date(b.checkOutDate).toLocaleDateString(),
+            checkIn: new Date(b.checkInDate).toLocaleDateString('en-GB'),
+            checkOut: new Date(b.checkOutDate).toLocaleDateString('en-GB'),
             nights: Math.ceil((new Date(b.checkOutDate) - new Date(b.checkInDate)) / (1000 * 60 * 60 * 24)),
-            amount: `$${b.totalPrice}`,
+            amount: `₹${b.totalPrice}`,
             status: b.bookingStatus,
             isRatedByHost: reviewedBookingIds.has(b._id.toString()),
             guestVerified: b.guestId?.verificationStatus || false
@@ -132,8 +149,27 @@ exports.getHostEarnings = async (req, res) => {
         const properties = await Property.find({ hostId })
         const propertyIds = properties.map(p => p._id)
 
+        const { period } = req.query
+        let dateFilter = {}
+
+        if (period === "last15") {
+            const cutoff = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000)
+            dateFilter.checkInDate = { $gte: cutoff }
+        } else if (period === "lastMonth") {
+            const cutoff = new Date()
+            cutoff.setMonth(cutoff.getMonth() - 1)
+            dateFilter.checkInDate = { $gte: cutoff }
+        } else if (period === "last3Months") {
+            const cutoff = new Date()
+            cutoff.setMonth(cutoff.getMonth() - 3)
+            dateFilter.checkInDate = { $gte: cutoff }
+        }
+
         // Find all bookings for these properties, newest check-outs first
-        const bookings = await Booking.find({ propertyId: { $in: propertyIds } })
+        const bookings = await Booking.find({ 
+            propertyId: { $in: propertyIds },
+            ...dateFilter
+        })
             .sort({ checkOutDate: -1 })
             .populate("propertyId", "title")
             .populate("guestId", "fullName email")
@@ -174,10 +210,10 @@ exports.getHostEarnings = async (req, res) => {
                 // Add to transactions history
                 transactions.push({
                     id: b._id.toString().slice(-6),
-                    date: date.toLocaleDateString(),
+                    date: date.toLocaleDateString('en-GB'),
                     property: b.propertyId ? b.propertyId.title : "Unknown",
                     guest: b.guestId ? b.guestId.fullName : "Unknown",
-                    amount: `$${payout}`,
+                    amount: `₹${payout}`,
                     status: "Completed"
                 })
 
@@ -187,10 +223,10 @@ exports.getHostEarnings = async (req, res) => {
                 // Add to transactions history
                 transactions.push({
                     id: b._id.toString().slice(-6),
-                    date: date.toLocaleDateString(),
+                    date: date.toLocaleDateString('en-GB'),
                     property: b.propertyId ? b.propertyId.title : "Unknown",
                     guest: b.guestId ? b.guestId.fullName : "Unknown",
-                    amount: `$${payout}`,
+                    amount: `₹${payout}`,
                     status: "Pending"
                 })
             }
@@ -250,7 +286,7 @@ exports.getHostProperties = async (req, res) => {
                 name: p.title,
                 location: p.location,
                 image: p.images && p.images.length > 0 ? p.images[0] : "https://images.unsplash.com/photo-1542718610-a1d656d1884c?w=400",
-                price: `$${p.pricePerNight}`,
+                price: `₹${p.pricePerNight}`,
                 status: p.availabilityStatus ? "Active" : "Inactive",
                 bookings: bookingsCount,
                 rating: calculatedRating,
@@ -310,7 +346,7 @@ exports.getHostReviews = async (req, res) => {
                 guest: r.guestId ? r.guestId.fullName : "Unknown Guest",
                 guestPicture: r.guestId ? r.guestId.profilePicture || "" : "",
                 rating: rating,
-                date: new Date(r.createdAt).toLocaleDateString(),
+                date: new Date(r.createdAt).toLocaleDateString('en-GB'),
                 comment: r.reviewText,
                 response: r.hostResponse
             }
