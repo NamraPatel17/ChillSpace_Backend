@@ -96,7 +96,7 @@ exports.updateDispute = async (req, res) => {
         if (priority)  updates.priority  = priority
         if (adminNote !== undefined) updates.adminNote = adminNote
 
-        const dispute = await Dispute.findByIdAndUpdate(id, updates, { new: true })
+        const dispute = await Dispute.findByIdAndUpdate(id, updates, { returnDocument: 'after' })
         if (!dispute) return res.status(404).json({ message: "Dispute not found" })
 
         res.status(200).json({ message: "Dispute updated", dispute })

@@ -1,40 +1,31 @@
 const jwt = require("jsonwebtoken")
-const secret = "secret"
 
-const validateToken = async(req,res,next)=>{
-
-    try{
-
+const validateToken = async (req, res, next) => {
+    try {
         const token = req.headers.authorization
-        console.log(token)
-        if(token){
-            //token Bearer
-            if(token.startsWith("Bearer ")){
 
-                //remove Bearer from token
+        if (!token) {
+            return res.status(401).json({ message: "Access denied. No token provided." })
+        }
 
-                const tokenValue = token.split(" ")[1]
-                //verifytoken using jwt
-                const decodedData = jwt.verify(tokenValue,secret)
-                req.user = decodedData
-                next()
-            }else{
-                res.status(401).json({
-                    message:"token is not Bearer token"
-                })
-            }
+        if (!token.startsWith("Bearer ")) {
+            return res.status(401).json({ message: "Invalid token format. Use Bearer token." })
         }
-        else{
-            res.status(401).json({
-                message:"token is not present.."
-            })
+
+        const tokenValue = token.split(" ")[1]
+        const decodedData = jwt.verify(tokenValue, process.env.JWT_SECRET)
+        req.user = decodedData
+        next()
+
+    } catch (err) {
+        if (err.name === "TokenExpiredError") {
+            return res.status(401).json({ message: "Session expired. Please log in again." })
         }
-    }catch(err){
-        console.log(err)
-        res.status(500).json({
-            message:"error while validating token",
-            err:err
-        })
+        if (err.name === "JsonWebTokenError") {
+            return res.status(401).json({ message: "Invalid token." })
+        }
+        res.status(500).json({ message: "Authentication error." })
     }
 }
+
 module.exports = validateToken

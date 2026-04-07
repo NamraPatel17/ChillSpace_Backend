@@ -75,7 +75,7 @@ exports.updateVerificationStatus = async (req, res) => {
         const verification = await Verification.findByIdAndUpdate(
             req.params.id,
             { status, remarks },
-            { new: true }
+            { returnDocument: 'after' }
         )
 
         if (!verification) {

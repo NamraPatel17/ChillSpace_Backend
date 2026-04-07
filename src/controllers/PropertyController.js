@@ -209,7 +209,7 @@ exports.updateProperty = async (req,res)=>{
         const updatedProperty = await Property.findByIdAndUpdate(
             req.params.id,
             updateData,
-            {new:true}
+            { returnDocument: 'after' }
         )
 
         res.status(200).json({
@@ -325,7 +325,7 @@ exports.updatePropertyStatus = async (req, res) => {
         const property = await Property.findByIdAndUpdate(
             req.params.id, 
             { availabilityStatus: status },
-            { new: true }
+            { returnDocument: 'after' }
         )
         if (!property) return res.status(404).json({ message: "Property not found" })
         res.status(200).json({ message: `Property ${status ? 'activated' : 'suspended'} successfully`, data: property })

@@ -5,7 +5,6 @@ const mailSend = require("../utils/MailUtil")
 const jwt = require("jsonwebtoken")
 const crypto = require("crypto")
 const uploadToCloudinary = require("../utils/CloudinaryUtil")
-const secret = "secret"
 
 const registerUser = async(req,res)=>{
 
@@ -29,19 +28,11 @@ const registerUser = async(req,res)=>{
         })
 
         
-    }catch(err){
-        console.log("REGISTER ERROR:", err)  // <‑‑ add this
-        // Duplicate email error from MongoDB
+    } catch(err) {
         if (err.code === 11000 && err.keyPattern && err.keyPattern.email) {
-            return res.status(400).json({
-                message: "Email already registered"
-            })
+            return res.status(400).json({ message: "Email already registered" })
         }
-        
-        res.status(500).json({
-            message:"error while creating user",
-            err:err.message || err
-        })
+        res.status(500).json({ message: "error while creating user", err: err.message || err })
     }
 }
 
@@ -53,8 +44,7 @@ const loginUser= async(req,res)=>{
 
         const {email,password} = req.body
         //const foundUserFromEmail = await userSchema.findOne({modelColumnName:req.body.email})
-        const foundUserFromEmail = await userSchema.findOne({email:email}) //admin@yopmail.com
-        console.log(foundUserFromEmail)
+        const foundUserFromEmail = await userSchema.findOne({email:email})
         if(foundUserFromEmail){
             if (foundUserFromEmail.accountStatus === "Suspended") {
                 return res.status(403).json({ message: "Your account has been suspended. Please contact support." });
@@ -67,7 +57,7 @@ const loginUser= async(req,res)=>{
             const isPasswordMatched = await bcrypt.compare(password,foundUserFromEmail.password)
             //..if password compare it will return true else false
             if(isPasswordMatched){
-                const token = jwt.sign(foundUserFromEmail.toObject(),secret)
+                const token = jwt.sign(foundUserFromEmail.toObject(), process.env.JWT_SECRET, { expiresIn: "7d" })
                 res.status(200).json({
                     message:"Login Success",
                     token:token,
@@ -130,7 +120,7 @@ const updateProfile = async (req, res) => {
         const updatedUser = await userSchema.findByIdAndUpdate(
             req.user._id,
             { $set: updates },
-            { new: true, runValidators: true }
+            { returnDocument: 'after', runValidators: true }
         ).select("-password")
 
         res.status(200).json({
@@ -227,7 +217,7 @@ const uploadProfilePhoto = async (req, res) => {
         const updatedUser = await userSchema.findByIdAndUpdate(
             userId,
             { profilePicture: cloudinaryResponse.secure_url },
-            { new: true }
+            { returnDocument: 'after' }
         ).select("-password");
 
         res.status(200).json({

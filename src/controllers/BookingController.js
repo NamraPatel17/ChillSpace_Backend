@@ -152,7 +152,7 @@ exports.updateBookingStatus = async (req,res)=>{
         const booking = await Booking.findByIdAndUpdate(
             req.params.id,
             {bookingStatus:req.body.bookingStatus},
-            {new:true}
+            { returnDocument: 'after' }
         )
 
         res.status(200).json({
@@ -173,7 +173,7 @@ exports.cancelBooking = async (req,res)=>{
         const booking = await Booking.findByIdAndUpdate(
             req.params.id,
             {bookingStatus:"Cancelled"},
-            {new:true}
+            { returnDocument: 'after' }
         )
 
         res.status(200).json({

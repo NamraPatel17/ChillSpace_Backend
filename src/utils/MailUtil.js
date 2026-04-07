@@ -33,7 +33,7 @@ const mailSend = async(to,subject,templateName, replacements = {})=>{
     return await transporter.sendMail(mailOptions)
 
  }catch(err){
-    console.log("MAIL ERROR:",err)
+    console.error("[Mail] Send failed:", err.message)
  }
 }
 module.exports = mailSend

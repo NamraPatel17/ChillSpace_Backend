@@ -15,9 +15,6 @@ router.get("/analytics", validateToken, checkRole(["Admin"]), adminController.ge
 // Get all bookings
 router.get("/bookings", validateToken, checkRole(["Admin"]), adminController.getAllBookings)
 
-// Get all disputes
-router.get("/disputes", validateToken, checkRole(["Admin"]), adminController.getAllDisputes)
-
 // Get all payments / financials
 router.get("/payments", validateToken, checkRole(["Admin"]), adminController.getAllPayments)
 

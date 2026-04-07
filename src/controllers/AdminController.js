@@ -37,35 +37,86 @@ exports.getAllActivities = async (req,res)=>{
 
 exports.getAdminAnalytics = async (req, res) => {
     try {
-        // 1. Basic Counts
-        const totalUsers = await User.countDocuments({})
-        
-        // Auto-complete confirmed bookings that are past checkout date
+        // ── Date helpers ────────────────────────────────────────────────────
+        const now        = new Date()
+        const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+        const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+        const lastMonthEnd   = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59)
+
+        // Auto-complete confirmed bookings past checkout
         await Booking.updateMany(
-            { bookingStatus: "Confirmed", checkOutDate: { $lt: new Date() } },
+            { bookingStatus: "Confirmed", checkOutDate: { $lt: now } },
             { bookingStatus: "Completed" }
         )
 
-        const activeListings = await Property.countDocuments({ availabilityStatus: true })
-        const allBookings = await Booking.find()
+        // ── This month counts ────────────────────────────────────────────────
+        const totalUsers        = await User.countDocuments({})
+        const activeListings    = await Property.countDocuments({ availabilityStatus: true })
+        const allBookings       = await Booking.find()
 
-        const totalBookings   = allBookings.length
-        const confirmedCount  = allBookings.filter(b => b.bookingStatus === "Confirmed").length
-        const pendingCount    = allBookings.filter(b => b.bookingStatus === "Pending").length
-        const cancelledCount  = allBookings.filter(b => b.bookingStatus === "Cancelled").length
-        const completedCount  = allBookings.filter(b => b.bookingStatus === "Completed").length
+        const paidBookings = allBookings.filter(
+            b => b.bookingStatus === "Confirmed" || b.bookingStatus === "Completed"
+        )
 
-        // 2. Revenue – confirmed + completed only
-        const revenue = allBookings
-            .filter(b => b.bookingStatus === "Confirmed" || b.bookingStatus === "Completed")
-            .reduce((sum, b) => sum + (b.totalPrice || 0), 0)
+        const totalBookings = allBookings.length
 
-        // 3. Occupancy rate (active bookings ÷ total)
-        const occupancyRate = totalBookings > 0
+        // Platform revenue = 10% commission of all paid bookings
+        const grossRevenue      = paidBookings.reduce((s, b) => s + (b.totalPrice || 0), 0)
+        const platformRevenue   = Math.round(grossRevenue * 0.10)
+
+        // Booking breakdown
+        const confirmedCount = allBookings.filter(b => b.bookingStatus === "Confirmed").length
+        const pendingCount   = allBookings.filter(b => b.bookingStatus === "Pending").length
+        const cancelledCount = allBookings.filter(b => b.bookingStatus === "Cancelled").length
+        const completedCount = allBookings.filter(b => b.bookingStatus === "Completed").length
+        const occupancyRate  = totalBookings > 0
             ? Math.round(((confirmedCount + completedCount) / totalBookings) * 100)
             : 0
 
-        // 4. Avg rating – property reviews only
+        // ── Last month counts (for % change) ────────────────────────────────
+        const lastMonthUsers = await User.countDocuments({ createdAt: { $gte: lastMonthStart, $lte: lastMonthEnd } })
+        const thisMonthUsers = await User.countDocuments({ createdAt: { $gte: thisMonthStart } })
+
+        const lastMonthListings = await Property.countDocuments({
+            createdAt: { $gte: lastMonthStart, $lte: lastMonthEnd }
+        })
+        const thisMonthListings = await Property.countDocuments({ createdAt: { $gte: thisMonthStart } })
+
+        const lastMonthBookings = await Booking.countDocuments({
+            createdAt: { $gte: lastMonthStart, $lte: lastMonthEnd }
+        })
+        const thisMonthBookings = await Booking.countDocuments({ createdAt: { $gte: thisMonthStart } })
+
+        const lastMonthPaid = await Booking.find({
+            createdAt: { $gte: lastMonthStart, $lte: lastMonthEnd },
+            bookingStatus: { $in: ["Confirmed", "Completed"] }
+        })
+        const thisMonthPaid = await Booking.find({
+            createdAt: { $gte: thisMonthStart },
+            bookingStatus: { $in: ["Confirmed", "Completed"] }
+        })
+        const lastMonthRevenue   = Math.round(lastMonthPaid.reduce((s, b) => s + (b.totalPrice || 0), 0) * 0.10)
+        const thisMonthRevenue   = Math.round(thisMonthPaid.reduce((s, b) => s + (b.totalPrice || 0), 0) * 0.10)
+
+        // ── % change helper ──────────────────────────────────────────────────
+        const pctChange = (current, previous) => {
+            if (previous === 0 && current === 0) return { value: "0.0", direction: "neutral" }
+            if (previous === 0) return { value: "100.0", direction: "up" }
+            const diff = ((current - previous) / previous) * 100
+            return {
+                value: Math.abs(diff).toFixed(1),
+                direction: diff >= 0 ? "up" : "down"
+            }
+        }
+
+        const changes = {
+            users:    pctChange(thisMonthUsers,    lastMonthUsers),
+            listings: pctChange(thisMonthListings, lastMonthListings),
+            bookings: pctChange(thisMonthBookings, lastMonthBookings),
+            revenue:  pctChange(thisMonthRevenue,  lastMonthRevenue)
+        }
+
+        // ── Avg rating ───────────────────────────────────────────────────────
         const propertyReviews = await Review.find({
             $or: [{ reviewType: "property" }, { reviewType: { $exists: false } }]
         })
@@ -75,37 +126,15 @@ exports.getAdminAnalytics = async (req, res) => {
             avgRating = (sum / propertyReviews.length).toFixed(1)
         }
 
-        // 5. Recent Activity
-        const recentBookings    = await Booking.find().sort({ createdAt: -1 }).limit(5).populate("guestId", "fullName").populate("propertyId", "title")
-        const recentProperties  = await Property.find().sort({ createdAt: -1 }).limit(5).populate("hostId", "fullName")
-        const recentReviews     = await Review.find({ $or: [{ reviewType: "property" }, { reviewType: { $exists: false } }] }).sort({ createdAt: -1 }).limit(5).populate("guestId", "fullName").populate("propertyId", "title")
+        // ── Recent Activity ──────────────────────────────────────────────────
+        const recentBookings   = await Booking.find().sort({ createdAt: -1 }).limit(5).populate("guestId", "fullName").populate("propertyId", "title")
+        const recentProperties = await Property.find().sort({ createdAt: -1 }).limit(5).populate("hostId", "fullName")
+        const recentReviews    = await Review.find({ $or: [{ reviewType: "property" }, { reviewType: { $exists: false } }] }).sort({ createdAt: -1 }).limit(5).populate("guestId", "fullName").populate("propertyId", "title")
 
         let activities = []
-
-        recentBookings.forEach(b => {
-            activities.push({
-                user: b.guestId?.fullName || "Unknown Guest",
-                action: "Made a booking",
-                property: b.propertyId?.title || "Unknown Property",
-                date: b.createdAt
-            })
-        })
-        recentProperties.forEach(p => {
-            activities.push({
-                user: p.hostId?.fullName || "Unknown Host",
-                action: "Listed a new property",
-                property: p.title,
-                date: p.createdAt
-            })
-        })
-        recentReviews.forEach(r => {
-            activities.push({
-                user: r.guestId?.fullName || "Unknown Guest",
-                action: "Left a review",
-                property: r.propertyId?.title || "Unknown Property",
-                date: r.createdAt
-            })
-        })
+        recentBookings.forEach(b => activities.push({ user: b.guestId?.fullName || "Unknown Guest", action: "Made a booking", property: b.propertyId?.title || "Unknown Property", date: b.createdAt }))
+        recentProperties.forEach(p => activities.push({ user: p.hostId?.fullName || "Unknown Host", action: "Listed a property", property: p.title, date: p.createdAt }))
+        recentReviews.forEach(r => activities.push({ user: r.guestId?.fullName || "Unknown Guest", action: "Left a review", property: r.propertyId?.title || "Unknown Property", date: r.createdAt }))
 
         activities.sort((a, b) => new Date(b.date) - new Date(a.date))
         activities = activities.slice(0, 8).map(a => {
@@ -120,13 +149,14 @@ exports.getAdminAnalytics = async (req, res) => {
         })
 
         res.status(200).json({
-            stats: { totalUsers, activeListings, totalBookings, revenue },
+            stats: { totalUsers, activeListings, totalBookings, revenue: platformRevenue },
+            changes,
             bookingBreakdown: { confirmed: confirmedCount, pending: pendingCount, cancelled: cancelledCount, completed: completedCount },
             performance: {
                 satisfaction: avgRating,
                 occupancy: occupancyRate,
                 responseTime: 2.3,
-                revenueGrowth: 18.7
+                revenueGrowth: changes.revenue.direction === "up" ? parseFloat(changes.revenue.value) : -parseFloat(changes.revenue.value)
             },
             recentActivity: activities
         })
@@ -137,6 +167,7 @@ exports.getAdminAnalytics = async (req, res) => {
 }
 
 // GET ALL BOOKINGS (ADMIN)
+
 exports.getAllBookings = async (req, res) => {
     try {
         // Auto-complete confirmed bookings that are past checkout date
@@ -164,79 +195,7 @@ exports.getAllBookings = async (req, res) => {
     }
 }
 
-// GET ALL DISPUTES (ADMIN)
-exports.getAllDisputes = async (req, res) => {
-    try {
-        // Return mock data until the Dispute model is fully formalized
-        const disputes = [
-            {
-                id: "DSP-001",
-                guest: "John Doe",
-                host: "Sarah Wilson",
-                property: "Beach Villa in Malibu",
-                issue: "Property condition doesn't match listing",
-                status: "pending",
-                priority: "high",
-                date: "March 15, 2026",
-                description: "Guest reported that the property was not as clean as advertised.",
-            },
-            {
-                id: "DSP-002",
-                guest: "Emily Chen",
-                host: "Mike Brown",
-                property: "Downtown Loft in NYC",
-                issue: "Cancellation refund dispute",
-                status: "in-progress",
-                priority: "medium",
-                date: "March 14, 2026",
-                description: "Host cancelled last minute, guest requesting full refund plus compensation.",
-            },
-            {
-                id: "DSP-003",
-                guest: "David Lee",
-                host: "Anna Taylor",
-                property: "Mountain Cabin in Aspen",
-                issue: "Missing amenities",
-                status: "resolved",
-                priority: "low",
-                date: "March 12, 2026",
-                description: "Hot tub was not functional during stay.",
-            },
-            {
-                id: "DSP-004",
-                guest: "Maria Garcia",
-                host: "Tom Anderson",
-                property: "Lakeside Cottage",
-                issue: "Noise complaint",
-                status: "pending",
-                priority: "medium",
-                date: "March 16, 2026",
-                description: "Neighbors complained about excessive noise from guests.",
-            },
-            {
-                id: "DSP-005",
-                guest: "James Wilson",
-                host: "Lisa Chen",
-                property: "City Apartment in LA",
-                issue: "Damage claim dispute",
-                status: "in-progress",
-                priority: "high",
-                date: "March 13, 2026",
-                description: "Host claims damages, guest denies responsibility.",
-            }
-        ];
 
-        const stats = {
-            pending: disputes.filter(d => d.status === "pending").length,
-            inProgress: disputes.filter(d => d.status === "in-progress").length,
-            resolved: disputes.filter(d => d.status === "resolved").length
-        };
-
-        res.status(200).json({ disputes, stats });
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
-}
 
 // GET ALL PAYMENTS (ADMIN)
 exports.getAllPayments = async (req, res) => {
@@ -552,7 +511,7 @@ exports.getAllUsers = async (req, res) => {
 exports.verifyUser = async (req, res) => {
     try {
         const { id } = req.params;
-        const user = await User.findByIdAndUpdate(id, { verificationStatus: true }, { new: true });
+        const user = await User.findByIdAndUpdate(id, { verificationStatus: true }, { returnDocument: 'after' });
         if (!user) return res.status(404).json({ message: "User not found" });
         res.status(200).json({ message: "User verified successfully", user });
     } catch (err) {
@@ -564,7 +523,7 @@ exports.verifyUser = async (req, res) => {
 exports.suspendUser = async (req, res) => {
     try {
         const { id } = req.params;
-        const user = await User.findByIdAndUpdate(id, { accountStatus: "Suspended" }, { new: true });
+        const user = await User.findByIdAndUpdate(id, { accountStatus: "Suspended" }, { returnDocument: 'after' });
         if (!user) return res.status(404).json({ message: "User not found" });
         await logActivity(req.user._id, "SUSPEND_USER", `Suspended user: ${user.fullName} (${user.email})`);
         res.status(200).json({ message: "User suspended successfully", user });
@@ -577,7 +536,7 @@ exports.suspendUser = async (req, res) => {
 exports.unsuspendUser = async (req, res) => {
     try {
         const { id } = req.params;
-        const user = await User.findByIdAndUpdate(id, { accountStatus: "Active" }, { new: true });
+        const user = await User.findByIdAndUpdate(id, { accountStatus: "Active" }, { returnDocument: 'after' });
         if (!user) return res.status(404).json({ message: "User not found" });
         await logActivity(req.user._id, "UNSUSPEND_USER", `Reactivated user: ${user.fullName} (${user.email})`);
         res.status(200).json({ message: "User reactivated successfully", user });
@@ -608,7 +567,7 @@ exports.updateBookingStatus = async (req, res) => {
         const booking = await Booking.findByIdAndUpdate(
             id,
             { bookingStatus: status },
-            { new: true }
+            { returnDocument: 'after' }
         ).populate("guestId", "fullName email").populate("propertyId", "title");
 
         if (!booking) return res.status(404).json({ message: "Booking not found" });
@@ -652,7 +611,7 @@ exports.approveVerification = async (req, res) => {
         const verif = await Verification.findByIdAndUpdate(
             verificationId,
             { status: "Approved", remarks: "" },
-            { new: true }
+            { returnDocument: 'after' }
         ).populate("userId", "fullName email");
 
         if (!verif) return res.status(404).json({ message: "Verification request not found" });
@@ -674,7 +633,7 @@ exports.rejectVerification = async (req, res) => {
         const verif = await Verification.findByIdAndUpdate(
             verificationId,
             { status: "Rejected", remarks: remarks || "" },
-            { new: true }
+            { returnDocument: 'after' }
         ).populate("userId", "fullName email");
 
         if (!verif) return res.status(404).json({ message: "Verification request not found" });
