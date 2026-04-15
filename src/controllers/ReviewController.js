@@ -72,14 +72,16 @@ exports.addGuestReview = async (req, res) => {
             return res.status(400).json({ message: "bookingId and rating are required" })
         }
 
-        const booking = await Booking.findById(bookingId)
+        const booking = await Booking.findById(bookingId).populate("propertyId", "hostId")
         if (!booking) return res.status(404).json({ message: "Booking not found" })
 
-        if (booking.hostId?.toString() !== hostId.toString()) {
+        // Support both old bookings (no hostId on booking) and new ones
+        const bookingHostId = booking.hostId?.toString() || booking.propertyId?.hostId?.toString()
+        if (!bookingHostId || bookingHostId !== hostId.toString()) {
             return res.status(403).json({ message: "You are not the host for this booking" })
         }
 
-        if (booking.status !== "Completed" && booking.bookingStatus?.toLowerCase() !== "completed") {
+        if (booking.bookingStatus?.toLowerCase() !== "completed") {
             return res.status(400).json({ message: "Can only review guests for completed bookings" })
         }
 
@@ -90,7 +92,7 @@ exports.addGuestReview = async (req, res) => {
 
         const review = new Review({
             guestId: booking.guestId,
-            propertyId: booking.propertyId,
+            propertyId: booking.propertyId?._id || booking.propertyId,
             bookingId: booking._id,
             reviewType: "guest",
             hostReviewer: hostId,
